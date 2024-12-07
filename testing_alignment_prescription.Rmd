@@ -1,0 +1,520 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+```{r}
+library(shiny)
+# library(reactlog)
+library(sf)
+library(tidyverse)
+library(ggplot2)
+library(shinyWidgets)
+library(shinyBS)
+# library(kableExtra)
+# library(rms)
+library(svglite)
+library(glue)
+library(cowplot)
+library(janitor)
+# library(rms)
+# library(Hmisc)
+library(cowplot)
+# library(assertr)
+library(lubridate)
+library(shinydashboard)
+library(magick)
+# library(ggforce)
+library(plotly)
+
+source("jh_functions.R", local = TRUE)
+source("compute_segment_angles_function_from_sim_data_2024.R", local = TRUE)
+source("function_segment_angles_separated.R", local = TRUE)
+
+source("jh_spine_build_NEW_function.R", local = TRUE)
+
+source("jh_prescribing_alignment_functions.R", local = TRUE)
+
+source("spinal_regional_alignment_analysis_by_vpa.R", local = TRUE)
+
+# source("jh_build_spine_by_vertebral_pelvic_angles_only.R", local = TRUE)
+source("jh_build_spine_by_vertebral_pelvic_angles_cleaned.R", local = TRUE)
+source("prescribing_alignment_by_matching_unfused.R", local = TRUE)
+source("xray_segment_angles_model_functions.R", local = TRUE)
+
+```
+
+```{r}
+
+xray <- image_read(path = "C:/Users/hillsj1.M2200166331/Desktop/surgimap_images/comstock.jpg", density = 81)
+      
+
+xray <-  image_scale(image_read(path = "C:/Users/hillsj1.M2200166331/Desktop/surgimap_images/comstock.jpg"), "400x")
+
+      xray_height <- image_info(xray)$height
+      xray_width <- image_info(xray)$width
+      
+      
+       img_resized <- image_scale(xray, "400x")
+       
+       
+       img_resized
+xray_height
+xray_width
+xray
+image_info(xray)
+```
+
+
+```{r, fig.height=6, fig.width=4}
+alignment_parameters_list <- list()
+alignment_parameters_list$pelvic_incidence <- 65
+alignment_parameters_list$pelvic_tilt <- 42
+alignment_parameters_list$l1pa <- 26
+alignment_parameters_list$t9pa <- 31
+alignment_parameters_list$t4pa <- 34
+alignment_parameters_list$c2pa <- 38
+
+
+simulation_list <- build_full_spine_from_vertebral_pelvic_angles_function(pelv_inc_value = alignment_parameters_list$pelvic_incidence,
+                                                                                        pt_value = alignment_parameters_list$pelvic_tilt,
+                                                                                        l1pa_value_input = alignment_parameters_list$l1pa,
+                                                                                        # l1s1_value_input = alignment_parameters_list$preop_l1s1,
+                                                                                        # t10_l2_value_input = alignment_parameters_list$preop_t10_l2,
+                                                                                        t9pa_value_input = alignment_parameters_list$t9pa,
+                                                                                        t4pa_value_input = alignment_parameters_list$t4pa,
+                                                                                        c2pa_value_input = alignment_parameters_list$c2pa,
+                                                                                        # c2_c7_value_input = alignment_parameters_list$preop_c2c7,
+                                                                                        # input_segment_angles = "yes",
+                                                                                        # segment_angles_input = segment_angles_list,
+                                                                                        spine_faces = "right"
+        )
+        
+simulation_list$spine_df
+spine_geoms_df <- simulation_list$spine_df %>%
+          select(object, geom, geom_alpha)
+        
+        # measurements_df <- spine_simulation_list$measurements_df
+        
+        ggplot() +
+          geom_sf(data = spine_geoms_df,
+                  color = "black",
+                  aes(geometry = geom,
+                      alpha = geom_alpha,
+                      fill = "grey90")) +
+          # ylim(-20, 110) +
+          theme_void() +
+          scale_fill_identity() +
+          scale_alpha_identity()
+```
+
+
+```{r, fig.height=6, fig.width=4}
+example_upper <- build_upper_t_uiv_spine_plot_function(pso_option_number = 1, 
+                                          preop_age = 55,
+                                          preop_sex = "Male",
+                                          preop_pelvic_incidence = alignment_parameters_list$pelvic_incidence,
+                                          preop_pt = alignment_parameters_list$pelvic_tilt,
+                                          preop_l1pa = alignment_parameters_list$l1pa,
+                                          preop_t9pa = alignment_parameters_list$t9pa,
+                                          preop_t4pa = alignment_parameters_list$t4pa,
+                                          preop_c2pa = alignment_parameters_list$c2pa,
+                                          # preop_rigid_levels_vector_reactive = c(),
+                                          preop_rigid_levels_vector_reactive = c("l5_segment", "l4_segment", "l3_segment", "l2_segment", "l1_segment"), #preop_rigid_levels_vector_reactive()
+                                          return_list_or_plot = "list"
+    )
+
+example_upper$prescribed_plot_no_targets
+
+
+example_lower <- build_t11_spine_plot_function(pso_option_number = 1, 
+                                          preop_age = 55,
+                                          preop_sex = "Male",
+                                          preop_pelvic_incidence = alignment_parameters_list$pelvic_incidence,
+                                          preop_pt = alignment_parameters_list$pelvic_tilt,
+                                          preop_l1pa = alignment_parameters_list$l1pa,
+                                          preop_t9pa = alignment_parameters_list$t9pa,
+                                          preop_t4pa = alignment_parameters_list$t4pa,
+                                          preop_c2pa = alignment_parameters_list$c2pa,
+                                          preop_rigid_levels_vector_reactive = c(),
+                                          # preop_rigid_levels_vector_reactive = c("l5_segment", "l4_segment", "l3_segment"), #preop_rigid_levels_vector_reactive()
+                                          return_list_or_plot = "list"
+    )
+
+example_lower$prescribed_plot_no_targets
+```
+
+
+```{r, fig.height=6, fig.width=4}
+example_upper$prescribed_plot_no_targets
+
+ggsave(filename = "prescribe_upper_icon.svg", plot = example_upper$prescribed_plot_no_targets, width = 4, height = 6, units = "in", device = "svg")
+
+
+example_lower$prescribed_plot_no_targets
+
+ggsave(filename = "prescribe_lower_icon.svg", plot = example_lower$prescribed_plot_no_targets, width = 4, height = 6, units = "in", device = "svg")
+
+```
+
+
+```{r, fig.height=8, fig.width=3}
+fem_head_center <- c(327.73, )
+
+
+centroid_df <- tibble(spine_point = c('fem_head_center', 's1_anterior_superior', 's1_posterior_superior', 's1_center', 'l5_centroid', 'l4_centroid', 'l3_centroid', 'l2_centroid', 'l1_centroid', 't12_centroid', 't11_centroid', 't10_centroid', 't9_centroid', 't8_centroid', 't7_centroid', 't6_centroid', 't5_centroid', 't4_centroid', 't3_centroid', 't2_centroid', 't1_centroid', 'c7_centroid', 'c6_centroid', 'c5_centroid', 'c4_centroid', 'c3_centroid', 'c2_centroid'), 
+                      x = c(327.73, 212.04, 143.93, 177.983, 195.844, 212.971, 213.036, 201.996, 188.713, 180.772, 176.601, 174.52, 172.852, 170.853, 168.684, 167.048, 166.648, 168.187, 171.828, 177.059, 183.115, 187.919, 192.612, 197.05, 201.086, 204.575, 207.373), 
+                      y = c(27.64, 162.00, 189.05, 175.524, 208.669601856268, 270.225, 337.091, 403.957, 470.823, 531.469, 592.115, 652.761, 713.407, 763.79, 814.173, 864.556, 914.938, 965.321, 1012.905, 1060.489, 1108.073, 1144.927, 1181.781, 1218.635, 1255.489, 1292.343, 1329.197))
+
+
+
+
+s1_anterior_superior <- c((centroid_df %>%  filter(spine_point == "s1_anterior_superior"))$x, (centroid_df %>%  filter(spine_point == "s1_anterior_superior"))$y)
+
+s1_posterior_superior <- c((centroid_df %>%  filter(spine_point == "s1_posterior_superior"))$x, (centroid_df %>%  filter(spine_point == "s1_posterior_superior"))$y)
+
+s1_endplate_width <- jh_calculate_distance_between_2_points_function(point_1 = s1_anterior_superior, point_2 = s1_posterior_superior)
+
+s1_endplate_width
+
+vertebral_heights_df <- centroid_df %>%
+  filter(str_detect(spine_point, "centroid|center")) %>%
+  mutate(distance_to_cranial_vertebra = pmap(.l = list(..1 = x, ..2 = y, ..3 = lead(x), ..4 = lead(y)), 
+                                             .f = ~ jh_calculate_distance_between_2_points_function(point_1 = c(..1, ..2),
+                                                                                                    point_2 = c(..3, ..4)))) %>%
+  unnest() %>%
+  mutate(distance_to_caudal_vertebra = pmap(.l = list(..1 = x, ..2 = y, ..3 = lag(x), ..4 = lag(y)), 
+                                             .f = ~ jh_calculate_distance_between_2_points_function(point_1 = c(..1, ..2),
+                                                                                                    point_2 = c(..3, ..4)))) %>%
+  unnest() %>%
+  mutate(vertebral_height = 0.4*distance_to_cranial_vertebra + if_else(spine_point == "l5_centroid", 
+                                                                       0.7*distance_to_caudal_vertebra, 0.4*distance_to_caudal_vertebra)) %>%
+  # filter(str_detect(spine_point, "centroid")) %>%
+  mutate(vertebral_height = if_else(is.na(vertebral_height), lag(vertebral_height), vertebral_height)) %>%
+  select(spine_point, x, y, vertebral_height)
+
+vertebral_heights_df
+
+vert_angles_df <- vertebral_heights_df %>%
+  mutate(vert_angle = pmap(.l = list(..1 = lead(x), ..2 = lead(y), ..3 = lag(x), ..4 = lag(y)), 
+                        .f = ~ compute_perpendicular_angle(coord1_x = ..1,
+                                               coord1_y = ..2, 
+                                               coord2_x = ..3, 
+                                               coord2_y = ..4))) %>%
+  unnest(vert_angle) %>%
+  filter(str_detect(spine_point, "centroid"))
+
+
+vertebral_coord_dim_sf_df <- vertebral_heights_df %>%
+  filter(str_detect(spine_point, "centroid")) %>%
+  mutate(vertebral_width = seq(from = s1_endplate_width, to = 0.6*s1_endplate_width, length = nrow(.))) %>%
+  mutate(vert_sf = pmap(.l = list(..1 = x, ..2 = y, ..3 = vertebral_width, ..4 = vertebral_height), 
+                        .f = ~ create_vertebra(centroid_x = ..1,
+                                               centroid_y = ..2, 
+                                               width = ..3, 
+                                               height = ..4))) %>%
+  left_join(vert_angles_df)%>%
+  mutate(vert_sf = map(.x = vert_sf, .f = ~ st_geometry(.x))) 
+
+vertebral_coord_dim_sf_df %>%
+  mutate(vert_sf = map(.x = vert_sf, .f = ~ st_geometry(.x))) %>%
+  mutate(vert_sf_rot = map2(.x = vert_sf, .y = vert_angle, 
+                            .f = ~ rotate_polygon_around_centroid(polygon = .x, angle_degrees = .y)))
+
+```
+
+
+```{r, fig.height=8, fig.width=3}
+vertebral_coord_dim_sf_df %>%
+  mutate(vert_sf_rot = map2(.x = vert_sf, .y = vert_angle, .f = ~ rotate_polygon_around_centroid(polygon = .x, angle_degrees = .y)))
+
+# rotate_polygon_around_centroid(polygon = vertebral_coord_dim_sf_df$vert_sf[1], angle_degrees = vertebral_coord_dim_sf_df$vert_angle[1])
+
+vertebral_coord_dim_sf_df$vert_sf[1]
+
+  centroid <- st_centroid(vertebral_coord_dim_sf_df$vert_sf[[1]])
+  centroid_coords <- st_coordinates(centroid)
+  
+  vertebral_coord_dim_sf_df$vert_sf
+  
+  
+vertebral_coord_dim_sf_df
+
+spine_geoms <- st_multipolygon(x = vertebral_coord_dim_sf_df$vert_sf_rot)
+
+st_as_sf(vertebral_coord_dim_sf_df$vert_sf_rot)
+
+ggplot() + 
+  geom_sf(data = spine_geoms) +
+  geom_sf(data = st_multipolygon(x = vertebral_coord_dim_sf_df$vert_sf)) +
+  geom_path(data =  vertebral_coord_dim_sf_df, aes(x = x, y = y))
+
+```
+
+
+```{r}
+compute_perpendicular_angle <- function(coord1_x, coord1_y, coord2_x, coord2_y) {
+  # Step 1: Calculate the slope of the line connecting the two points
+  
+  coord1_x <- if_else(is.na(coord1_x), 0, coord1_x)
+  coord1_y <- if_else(is.na(coord1_y), 0, coord1_y)
+  coord2_x <- if_else(is.na(coord2_x), 0, coord2_x)
+  coord2_y <- if_else(is.na(coord2_y), 0, coord2_y)
+  
+  slope <- (coord2_y - coord1_y) / (coord2_x - coord1_x)
+  
+  # Step 2: Get the negative reciprocal for the perpendicular slope
+  if (slope != 0) {
+    perpendicular_slope <- -1 / slope
+  } else {
+    # If the original slope is zero (horizontal line), perpendicular line is vertical
+    perpendicular_slope <- Inf
+  }
+  
+  # Step 3: Calculate the angle in radians
+  # If the slope is infinite (vertical line), the angle is 90 degrees
+  if (is.infinite(perpendicular_slope)) {
+    angle_radians <- pi / 2
+  } else {
+    angle_radians <- atan(perpendicular_slope)
+  }
+  
+  # Convert the angle to degrees
+  angle_degrees <- angle_radians * 180 / pi
+  
+  return(angle_degrees)
+}
+
+
+
+rotate_polygon_around_centroid <- function(polygon, angle_degrees) {
+  # Step 1: Get the centroid of the polygon
+  centroid <- st_centroid(polygon)
+  centroid_coords <- st_coordinates(centroid)[1, 1:2]  # Ensure this is a 2D vector (x, y)
+  
+  # Step 2: Translate the polygon to have the centroid at the origin
+  coords <- st_coordinates(polygon)[, 1:2]  # Extract the polygon's coordinates
+  translated_coords <- sweep(coords, 2, centroid_coords)  # Subtract centroid from coordinates
+  
+  # Step 3: Create a rotation matrix
+  angle_radians <- angle_degrees * pi / 180  # Convert angle to radians
+  rotation_matrix <- matrix(c(cos(angle_radians), -sin(angle_radians),
+                              sin(angle_radians),  cos(angle_radians)),
+                            ncol = 2, byrow = TRUE)
+  
+  # Step 4: Apply the rotation matrix to the translated coordinates
+  rotated_coords <- translated_coords %*% rotation_matrix
+  
+  # Step 5: Translate the polygon back to its original position
+  final_coords <- sweep(rotated_coords, 2, centroid_coords, "+")
+  
+  # Step 6: Rebuild the rotated polygon
+  rotated_polygon <- st_polygon(list(final_coords))
+  
+  return(st_sfc(rotated_polygon, crs = st_crs(polygon)))
+}
+
+vertebral_coord_dim_sf_df$vert_sf[[1]]
+
+st_coordinates(polygon[1])[, 1:2]
+
+st_coordinates(x = vertebral_coord_dim_sf_df$vert_sf[[1]][, 1:2])
+
+st_centroid(vertebral_coord_dim_sf_df$vert_sf[[1]])
+
+vert_rot_df <- vertebral_coord_dim_sf_df %>%
+  mutate(vert_sf_rot = map2(.x = vert_sf, .y = vert_angle, 
+                            .f = ~ rotate_polygon_around_centroid(polygon = .x, angle_degrees = .y*-1)))%>%
+  mutate(vert_sf_rot = map(.x = vert_sf_rot, .f = ~ st_geometry(.x))) 
+
+vert_rot_df
+
+
+  
+geom_list <-  map(.x = c(1:length(vert_rot_df$vert_sf_rot)), .f =~ vert_rot_df$vert_sf_rot[[.x]][[1]])
+
+geom_list_buf <- map(.x = geom_list, .f = ~ st_buffer(x = st_buffer(x = .x, dist = -5, endCapStyle = "ROUND"), dist = 5))
+
+ggplot() + 
+  # geom_sf(data = geom_list) +
+  geom_sf(data = st_multipolygon(x = geom_list_buf)) +
+geom_path(data =  vertebral_coord_dim_sf_df, aes(x = x, y = y))
+
+  
+
+```
+```{r}
+vert_rot_df
+```
+
+
+```{r}
+library(tibble)
+library(sf)
+library(ggplot2)
+
+
+
+  # Function to create vertebra as an sf polygon
+  create_vertebra <- function(centroid_x = 0, centroid_y = 0, width = 5, height = 4) {
+    half_height <- height / 2
+    half_width <- width / 2
+    
+    # Define the four corners of the vertebra before rotation
+    sp <- c(centroid_x - half_width, centroid_y + half_height)
+    sa <- c(centroid_x + half_width, centroid_y + half_height)
+    ia <- c(centroid_x + half_width, centroid_y - half_height)
+    ip <- c(centroid_x - half_width, centroid_y - half_height)
+    
+    vert_body <- rbind(sp, sa, ia, ip, sp) ## binds the corners to make a square
+    
+    # vert_body <- rbind(sp, sa, ia, ip, sp, ia, ip, sa, sp) ## binds the corners to make a square
+
+    # # Rotation matrix to align the vertebra
+    # rotation_matrix <- matrix(c(cos(angle), -sin(angle), sin(angle), cos(angle)), ncol = 2)
+    # rotated_corners <- t(rotation_matrix %*% t(corners))
+    # 
+    # # Shift corners based on centroid coordinates
+    # rotated_corners <- sweep(rotated_corners, 2, as.numeric(centroid), "+")
+    # 
+    # # Create sf polygon
+    # vertebra_polygon <- st_polygon(list(rotated_corners))
+    # 
+    return(st_polygon(list(vert_body)))
+  }
+  
+  
+  # Define a rotation function
+rotate_polygon <- function(geometry, angle_degrees = 0) {
+  angle_radians <- angle_degrees * pi / 180  # Convert angle to radians
+  
+  # Create a rotation matrix
+  rotation_matrix <- matrix(c(cos(angle_radians), -sin(angle_radians),
+                              sin(angle_radians),  cos(angle_radians)),
+                            ncol = 2, byrow = TRUE)
+  
+  # Apply the rotation matrix to the coordinates of the geometry
+  coords <- st_coordinates(geometry)
+  rotated_coords <- coords[, 1:2] %*% rotation_matrix
+  
+  # Rebuild the geometry with the rotated coordinates
+  rotated_polygon <- st_polygon(list(rotated_coords))
+  
+  # return(st_sfc(rotated_polygon, crs = st_crs(geometry)))
+  
+  return(rotated_polygon)
+}
+
+
+test <- create_vertebra()
+
+test2 <- create_vertebra(centroid = c(-1, 9), width = 4.5)
+
+test_vert_1 <- st_polygon(list(test))
+test_vert_2 <- st_polygon(list(test2))
+
+ggplot() + 
+  geom_sf(data = spine_geoms) +
+  geom_path(data =  aes(x = x, y = y))
+geom_sf(data = rotate_polygon(vertebral_coord_dim_sf_df$vert_sf[1], -10) + c(0, 2), fill = NA)+ 
+geom_sf(data = rotate_polygon(test_vert_2))
+
+```
+
+
+```{r}
+# Function to plot spinal alignment using sf package
+# Function to plot spinal alignment using sf package
+plot_spinal_alignment <- function(centroid_df) {
+  
+  # Calculate the width of L5 (same as S1)
+  s1_width <- abs(centroid_df$x[centroid_df$spine_point == 's1_anterior_superior'] - 
+                  centroid_df$x[centroid_df$spine_point == 's1_posterior_superior'])
+  
+  # Define width percentages for each vertebra
+  vertebrae_widths <- seq(1, 0.6, length.out = length(grep('centroid', centroid_df$spine_point))) * s1_width
+  
+  # Function to create vertebra as an sf polygon
+  create_vertebra <- function(centroid, width, angle) {
+    height <- 5  # arbitrary height for each vertebra
+    half_width <- width / 2
+    
+    # Define the four corners of the vertebra before rotation
+    corners <- matrix(c(-half_width, -height/2,
+                         half_width, -height/2,
+                         half_width, height/2,
+                        -half_width, height/2), ncol = 2, byrow = TRUE)
+    
+    # Print the corners before rotation (for debugging)
+    print("Original corners before rotation:")
+    print(corners)
+    
+    # Rotation matrix to align the vertebra
+    rotation_matrix <- matrix(c(cos(angle), -sin(angle), sin(angle), cos(angle)), ncol = 2)
+    rotated_corners <- t(rotation_matrix %*% t(corners))
+    
+    # Print the rotated corners for debugging
+    print("Rotated corners:")
+    print(rotated_corners)
+    
+    # Shift corners based on centroid coordinates
+    rotated_corners <- sweep(rotated_corners, 2, as.numeric(centroid), "+")
+    
+    # Ensure polygon is closed by repeating the first point
+    rotated_corners <- rbind(rotated_corners, rotated_corners[1, ])
+    
+    # Check for any invalid coordinates
+    if (nrow(rotated_corners) > 3 && all(!is.na(rotated_corners))) {
+      # Create sf polygon
+      vertebra_polygon <- st_polygon(list(rotated_corners))
+      return(vertebra_polygon)
+    } else {
+      print("Invalid polygon, coordinates are:")
+      print(rotated_corners)
+      return(NULL)
+    }
+  }
+  
+  # Create list to store vertebrae polygons
+  vertebrae_polygons <- list()
+  
+  # Loop over all vertebra centroids to create polygons
+  for (i in seq(5, length(grep('centroid', centroid_df$spine_point)))) {
+    # Get centroids of current vertebra and the one above it to compute angle
+    centroid_cur <- centroid_df[centroid_df$spine_point == paste0('l', 6 - i, '_centroid'), c("x", "y")]
+    centroid_above <- centroid_df[centroid_df$spine_point == paste0('l', 5 - i, '_centroid'), c("x", "y")]
+    
+    # Calculate angle for vertebra rotation
+    angle <- atan2(centroid_above$y - centroid_cur$y, centroid_above$x - centroid_cur$x)
+    
+    # Print angle for debugging
+    print(paste("Angle for vertebra", i, ":", angle))
+    
+    # Create vertebra polygon
+    vertebra_polygon <- create_vertebra(c(centroid_cur$x, centroid_cur$y), vertebrae_widths[i], angle)
+    
+    if (!is.null(vertebra_polygon)) {
+      vertebrae_polygons[[i]] <- vertebra_polygon
+    }
+  }
+  
+  # Convert list of polygons to sf object, removing NULLs
+  vertebrae_sf <- st_sfc(vertebrae_polygons[!sapply(vertebrae_polygons, is.null)])
+  
+  # Plot using ggplot2
+  ggplot() +
+    geom_sf(data = vertebrae_sf, fill = "lightblue", color = "black") +
+    coord_sf() +
+    theme_minimal() +
+    labs(title = "Spinal Alignment", x = "X Coordinate", y = "Y Coordinate")
+}
+
+
+# Example input
+
+test_poly <- plot_spinal_alignment(centroid_df = centroid_df)
+
+centroid_df
+
+```
+
+

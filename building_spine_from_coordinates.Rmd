@@ -1,0 +1,1177 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+```{r}
+library(shiny)
+# library(reactlog)
+library(sf)
+library(tidyverse)
+library(ggplot2)
+library(shinyWidgets)
+library(shinyBS)
+# library(kableExtra)
+# library(rms)
+library(svglite)
+library(glue)
+library(cowplot)
+library(janitor)
+# library(rms)
+# library(Hmisc)
+library(cowplot)
+# library(assertr)
+library(lubridate)
+library(shinydashboard)
+library(magick)
+# library(ggforce)
+library(plotly)
+
+source("jh_functions.R", local = TRUE)
+source("compute_segment_angles_function_from_sim_data_2024.R", local = TRUE)
+source("function_segment_angles_separated.R", local = TRUE)
+
+source("jh_spine_build_NEW_function.R", local = TRUE)
+
+source("jh_prescribing_alignment_functions.R", local = TRUE)
+
+source("spinal_regional_alignment_analysis_by_vpa.R", local = TRUE)
+
+# source("jh_build_spine_by_vertebral_pelvic_angles_only.R", local = TRUE)
+source("jh_build_spine_by_vertebral_pelvic_angles_cleaned.R", local = TRUE)
+source("prescribing_alignment_by_matching_unfused.R", local = TRUE)
+source("xray_segment_angles_model_functions.R", local = TRUE)
+source("build_spine_from_coordinates_functions.R", local = TRUE)
+```
+```{r}
+fem_head_center <- c(327.73, 27.64)
+
+s1_anterior_superior <- c(212.04, 162.00)
+s1_posterior_superior <- c(143.93, 189.05)
+
+centroid_df <- tibble(spine_point = c('fem_head_center', 's1_anterior_superior', 's1_posterior_superior', 's1_center', 'l5_centroid', 'l4_centroid', 'l3_centroid', 'l2_centroid', 'l1_centroid', 't12_centroid', 't11_centroid', 't10_centroid', 't9_centroid', 't8_centroid', 't7_centroid', 't6_centroid', 't5_centroid', 't4_centroid', 't3_centroid', 't2_centroid', 't1_centroid', 'c7_centroid', 'c6_centroid', 'c5_centroid', 'c4_centroid', 'c3_centroid', 'c2_centroid'), 
+                      x = c(327.73, 212.04, 143.93, 177.983, 195.844, 212.971, 213.036, 201.996, 188.713, 180.772, 176.601, 174.52, 172.852, 170.853, 168.684, 167.048, 166.648, 168.187, 171.828, 177.059, 183.115, 187.919, 192.612, 197.05, 201.086, 204.575, 207.373), 
+                      y = c(27.64, 162.00, 189.05, 175.524, 208.669601856268, 270.225, 337.091, 403.957, 470.823, 531.469, 592.115, 652.761, 713.407, 763.79, 814.173, 864.556, 914.938, 965.321, 1012.905, 1060.489, 1108.073, 1144.927, 1181.781, 1218.635, 1255.489, 1292.343, 1329.197))
+
+centroid_df <- centroid_df %>%
+  filter(str_detect(spine_point, "center|centroid")) %>%
+  filter(spine_point != "fem_head_center")
+
+```
+
+
+```{r}
+# xr_centroid_df <- tibble(spine_point = c('s1_center', 'l5_centroid', 'l4_centroid', 'l3_centroid', 'l2_centroid', 'l1_centroid', 't12_centroid', 't11_centroid', 't10_centroid', 't9_centroid', 't8_centroid', 't7_centroid', 't6_centroid', 't5_centroid', 't4_centroid', 't3_centroid', 't2_centroid', 't1_centroid', 'c7_centroid', 'c6_centroid', 'c5_centroid', 'c4_centroid', 'c3_centroid', 'c2_centroid'), x = c(176.943, 197.637, 216.268, 215.139, 203.21, 189.28, 180.668, 176.311, 174.392, 173.088, 171.41, 169.492, 167.95, 167.401, 168.461, 171.309, 175.599, 180.799, 184.947, 189.23, 193.575, 197.908, 202.155, 206.244), y = c(178.678, 213.89695251878, 279.304, 343.305, 407.305, 471.305, 531.835, 592.366, 652.896, 713.426, 764.472, 815.518, 866.564, 917.61, 968.656, 1016.72, 1064.785, 1112.849, 1148.447, 1184.046, 1219.644, 1255.243, 1290.841, 1326.44))
+# 
+# xrfem_head_center <- c(323.45, 26.39)
+# 
+# s1_anterior_superior <- c(211.64, 162.87)
+# s1_posterior_superior <- c(142.24, 194.48)
+
+fem_head_center <- c(267, 108.125)
+s1_anterior_superior <- c(307.999585181399, 207.186571255347) 
+s1_posterior_superior <- c(351.257542255392, 230.511940265833)
+xr_centroid_df <- tibble(spine_point = c('s1_center', 'l5_centroid', 'l4_centroid', 'l3_centroid', 'l2_centroid', 'l1_centroid', 't12_centroid', 't11_centroid', 't10_centroid', 't9_centroid', 't8_centroid', 't7_centroid', 't6_centroid', 't5_centroid', 't4_centroid', 't3_centroid', 't2_centroid', 't1_centroid', 'c7_centroid', 'c6_centroid', 'c5_centroid', 'c4_centroid', 'c3_centroid', 'c2_centroid'), x = c(329.629, 319.265, 303.759, 293.615, 282.173, 267.286, 255.442, 241.865, 227.003, 211.305, 195.83, 178.927, 159.515, 136.513, 108.839, 89.57, 69.501, 49.945, 23.656, 3.841, -7.294, -7.545, 5.294, 33.426), y = c(218.849, 246.532227799854, 297.943, 335.264, 372.585, 409.905, 433.231, 456.556, 479.881, 503.207, 525.301, 547.394, 569.488, 591.582, 613.676, 627.083, 640.489, 653.896, 674.365, 694.834, 715.303, 735.772, 756.241, 776.71))
+
+# facing right but sloped back
+# fem_head_center <- c(179.585834159454, 311.403464250265) 
+# s1_anterior_superior <- c(168.19496401193, 415.769108760279)
+# s1_posterior_superior <- c(131.000166258704, 433.970818299091) 
+# xr_centroid_df <- tibble(spine_point = c('s1_center', 'l5_centroid', 'l4_centroid', 'l3_centroid', 'l2_centroid', 'l1_centroid', 't12_centroid', 't11_centroid', 't10_centroid', 't9_centroid', 't8_centroid', 't7_centroid', 't6_centroid', 't5_centroid', 't4_centroid', 't3_centroid', 't2_centroid', 't1_centroid', 'c7_centroid', 'c6_centroid', 'c5_centroid', 'c4_centroid', 'c3_centroid', 'c2_centroid'), x = c(149.598, 159.701, 164.634, 160.48, 155.66, 156.72, 165.761, 180.745, 198.952, 217.656, 233.222, 247.804, 262.24, 277.368, 294.024, 309.19, 324.659, 339.133, 350.574, 359.544, 365.533, 368.029, 366.522, 360.5), y = c(424.87, 449.244426738182, 494.511, 530.519, 566.527, 602.534, 632.607, 662.679, 692.752, 722.824, 750.047, 777.271, 804.494, 831.718, 858.941, 881.364, 903.786, 926.208, 946.916, 967.624, 988.332, 1009.039, 1029.747, 1050.455))
+
+# fem_head_center <- c(122.798055515499, 156.260083568676) 
+# s1_anterior_superior <- c(90.4784686863205, 228.538432295748)
+# s1_posterior_superior <- c(65.7980569258567, 238.528122770222)
+# xr_centroid_df <- tibble(spine_point = c('s1_center', 'l5_centroid', 'l4_centroid', 'l3_centroid', 'l2_centroid', 'l1_centroid', 't12_centroid', 't11_centroid', 't10_centroid', 't9_centroid', 't8_centroid', 't7_centroid', 't6_centroid', 't5_centroid', 't4_centroid', 't3_centroid', 't2_centroid', 't1_centroid', 'c7_centroid', 'c6_centroid', 'c5_centroid', 'c4_centroid', 'c3_centroid', 'c2_centroid'), x = c(78.138, 84.212, 87.54, 83.159, 75.999, 71.674, 74.095, 81.616, 91.658, 101.643, 108.304, 113.891, 119.086, 124.57, 131.025, 137.641, 145.028, 152.767, 158.768, 164.672, 170.428, 175.981, 181.277, 186.262), y = c(233.533, 245.564978266211, 267.91, 291.023, 314.136, 337.25, 359.286, 381.322, 403.358, 425.394, 443.376, 461.357, 479.338, 497.32, 515.301, 530.58, 545.858, 561.136, 572.987, 584.837, 596.688, 608.538, 620.389, 632.239))
+
+# facing left
+# fem_head_center <- c(264.537518043094, 103.879006782076) 
+# s1_anterior_superior <- c(309.066726563296, 207.301706553571) 
+# s1_posterior_superior <- c(353.595935083497, 232.439162976266) 
+# xr_centroid_df <- tibble(spine_point = c('s1_center', 'l5_centroid', 'l4_centroid', 'l3_centroid', 'l2_centroid', 'l1_centroid', 't12_centroid', 't11_centroid', 't10_centroid', 't9_centroid', 't8_centroid', 't7_centroid', 't6_centroid', 't5_centroid', 't4_centroid', 't3_centroid', 't2_centroid', 't1_centroid', 'c7_centroid', 'c6_centroid', 'c5_centroid', 'c4_centroid', 'c3_centroid', 'c2_centroid'), x = c(331.331, 322.442, 308.349, 299.733, 289.313, 275.311, 263.246, 249.723, 235.708, 222.163, 209.333, 195.894, 179.748, 158.799, 130.95, 109.387, 86.052, 62.72, 29.559, 3.85, -11.378, -13.092, 1.739, 36.146), y = c(219.87, 248.15007324045, 300.669, 332.989, 365.309, 397.628, 419.354, 441.08, 462.806, 484.532, 506.653, 528.774, 550.895, 573.016, 595.137, 609.022, 622.908, 636.793, 658.699, 680.604, 702.51, 724.415, 746.321, 768.226))
+fem_head_center <- c(196.935177726589, 228.045146345095)
+s1_anterior_superior <- c(221.566767401663, 332.729402464159) 
+s1_posterior_superior <- c(240.040459657969, 354.282043429849)
+xr_centroid_df <- tibble(spine_point = c('s1_center', 'l5_centroid', 'l4_centroid', 'l3_centroid', 'l2_centroid', 'l1_centroid', 't12_centroid', 't11_centroid', 't10_centroid', 't9_centroid', 't8_centroid', 't7_centroid', 't6_centroid', 't5_centroid', 't4_centroid', 't3_centroid', 't2_centroid', 't1_centroid', 'c7_centroid', 'c6_centroid', 'c5_centroid', 'c4_centroid', 'c3_centroid', 'c2_centroid'), x = c(230.803, 208.895, 185.646, 181.557, 193.796, 212.33, 223.186, 233.011, 242.245, 251.33, 262.353, 272.27, 279.55, 282.66, 280.067, 272.27, 260.935, 248.251, 239.572, 231.683, 224.953, 219.752, 216.448, 215.409), y = c(343.506, 361.645862426459, 395.335, 435.361, 475.387, 515.414, 540.558, 565.703, 590.848, 615.993, 646.372, 676.751, 707.13, 737.509, 767.887, 794.914, 821.94, 848.966, 868.124, 887.282, 906.44, 925.598, 944.756, 963.914))
+
+xrspine_build_list <- build_spine_from_coordinates_function(femoral_head_center = fem_head_center, 
+                                                         s1_anterior_superior = s1_anterior_superior, 
+                                                         s1_posterior_superior = s1_posterior_superior, 
+                                                         centroid_df = xr_centroid_df, 
+                                                         spine_facing = "left")
+
+
+glue_collapse(names(xrspine_build_list$spine_geom_list), sep = ", ")
+
+xrspine_build_list$segment_angles_list_for_planning
+
+st_polygon()
+sf::st_is_s
+sf::st_is(xrspine_build_list$spine_geom_list$l5_geom, )
+
+
+ggplot() + 
+  # geom_sf(data = st_minimum_rotated_rectangle(x = xrspine_build_list$spine_geom_list$l2_geom), fill = "green") +
+    geom_sf(data = xrspine_build_list$square_vert_df$geometry[1:15])
+  # geom_sf(data = st_multipolygon(xrspine_build_list$spine_geom_list[3:10]) + c(0, -50) )
+
+vert_coord_list <- map(.x = xrspine_build_list$square_vert_df$vert_coord_df, .f = ~ .x %>% distinct())
+
+names(vert_coord_list) <- xrspine_build_list$square_vert_df$spine_level
+
+vert_coord_list <- map(.x = vert_coord_list, .f = ~ reformat_vert_tibble(.x))
+
+
+segment_angles_list <- map2(.x = vert_coord_list[-length(vert_coord_list)], 
+                            .y = vert_coord_list[-1],
+                            .f = ~ calculate_segment_angle_between_vertebrae_from_coordinates_function(sp_upper = .y$sp, 
+                                          sa_upper = .y$sa, 
+                                          sp_lower = .x$sp, 
+                                          sa_lower = .x$sa)
+                            ) 
+
+names(segment_angles_list) <- names(vert_coord_list[-1])
+
+segment_angles_list
+```
+
+```{r}
+xrspine_build_list$segment_angles_list
+```
+
+
+
+```{r}
+reformat_vert_tibble <- function(tibble_input) {
+  # Convert the tibble to a named list with each point as a vector
+  named_list <- list(
+    sp = c(tibble_input$x[tibble_input$vert_point == "sp"], tibble_input$y[tibble_input$vert_point == "sp"]),
+    sa = c(tibble_input$x[tibble_input$vert_point == "sa"], tibble_input$y[tibble_input$vert_point == "sa"]),
+    ia = c(tibble_input$x[tibble_input$vert_point == "ia"], tibble_input$y[tibble_input$vert_point == "ia"]),
+    ip = c(tibble_input$x[tibble_input$vert_point == "ip"], tibble_input$y[tibble_input$vert_point == "ip"])
+  )
+  return(named_list)
+}
+
+calculate_segment_angle_between_vertebrae_from_coordinates_function <- function(sp_upper, sa_upper, sp_lower, sa_lower) {
+ vec1 <- sa_upper - sp_upper  # Vector for upper vertebra
+  vec2 <- sa_lower - sp_lower  # Vector for lower vertebra
+  
+  # Dot product of the two vectors
+  dot_product <- sum(vec1 * vec2)
+  
+  # Magnitudes of the vectors
+  mag_vec1 <- sqrt(sum(vec1^2))
+  mag_vec2 <- sqrt(sum(vec2^2))
+  
+  # Calculate the angle using the dot product formula
+  cos_theta <- dot_product / (mag_vec1 * mag_vec2)
+  
+  # Ensure the value is within the valid range for acos (to avoid numerical errors)
+  cos_theta <- min(1, max(-1, cos_theta))
+  
+  # Compute the angle in radians
+  theta_radians <- acos(cos_theta)
+  
+  # Calculate the cross product to determine if it's lordotic or kyphotic
+  cross_product <- (vec1[1] * vec2[2]) - (vec1[2] * vec2[1])
+  
+  # If the cross product is negative, it is kyphotic (angle opens posteriorly), otherwise lordotic
+  sign <- ifelse(cross_product < 0, -1, 1)
+  
+  # Convert the angle to degrees and apply the sign for lordosis/kyphosis
+  theta_degrees <- theta_radians * (180 / pi) * sign
+  
+  return(theta_degrees)
+}
+```
+
+
+```{r}
+
+vert_coord_list <- map(.x = xrspine_build_list$square_vert_df$vert_coord_df, .f = ~ .x %>% distinct())
+
+names(vert_coord_list) <- xrspine_build_list$square_vert_df$spine_level
+
+vert_coord_list <- map(.x = vert_coord_list, .f = ~ reformat_vert_tibble(.x))
+
+segment_angles_list2 <- list()
+
+segment_angles_list2$l5 <- c(33, 22)
+
+
+
+
+segment_angles_list_long <- map2(.x = vert_coord_list[-length(vert_coord_list)], 
+                            .y = vert_coord_list[-1],
+                            .f = ~ calculate_segment_angle_between_vertebrae_from_coordinates_function(sp_upper = .y$sp, 
+                                          sa_upper = .y$sa, 
+                                          sp_lower = .x$sp, 
+                                          sa_lower = .x$sa)
+                            )
+
+
+
+names(segment_angles_list_long) <- names(vert_coord_list[-1])
+
+segment_angles_list_long$l4
+
+segment_angles_list2
+segment_angles_list2 <- append(segment_angles_list2,  segment_angles_list_long)
+
+segment_angles_list2$c3
+
+```
+
+```{r}
+xrspine_build_list$square_vert_df$geometry[1]
+
+st_coordinates(xrspine_build_list$square_vert_df$geometry[1])
+```
+
+
+```{r}
+ggplot() +
+          geom_sf(data = xrspine_build_list$vert_geom_df,
+                  color = "black",
+                  aes(geometry = geometry,
+                      # alpha = geom_alpha,
+                      fill = "grey90"),
+                  fill = "grey90") +
+  geom_sf(data = xrspine_build_list$spine_geom_list$c2_geom,
+                  fill = "orange") +
+geom_sf(data = xrspine_build_list$spine_geom_list$c1_geom,
+                  fill = "purple")  +
+  geom_sf(data = c1_geom, fill = "green")
+  geom_sf(data = st_point(xrspine_build_list$c1_list$sa), color = "green") +
+  geom_sf(data = st_point(xrspine_build_list$c1_list$sp), color = "red") +
+  geom_sf(data = st_point(xrspine_build_list$c1_list$ia), color = "blue")+
+  geom_sf(data = st_point(xrspine_build_list$c1_list$ip), color = "purple")
+
+# xrspine_build_list$spine_geom_list$c1_geom
+
+xbuffer_amount <- median(xrspine_build_list$vert_geom_df$vertebral_height, na.rm = TRUE)*0.2
+xbuffer_amount
+
+c1_geom <- st_buffer(x = st_buffer(x = st_polygon(list(rbind(xrspine_build_list$c1_list$sa, 
+                                                    xrspine_build_list$c1_list$sp,
+                                                    xrspine_build_list$c1_list$ip, 
+                                                    xrspine_build_list$c1_list$ia,
+                                                    xrspine_build_list$c1_list$sa))), dist = -xbuffer_amount*0.1, endCapStyle = "ROUND"), dist = xbuffer_amount*0.2)
+
+
+c1_geom
+  c2_coord_df <- (xrspine_build_list$vert_geom_df %>%
+                    filter(spine_level == "c2"))$vert_coord_df[[1]] %>%
+    distinct()
+  
+  c2_coord_df
+  
+  c2_coord_list <- map2(c2_coord_df$x, c2_coord_df$y, ~ c(.x, .y)) %>%
+    set_names(c2_coord_df$vert_point)
+  
+  c2_coord_list$c2_sup_mid <- jh_get_point_along_line_function(coord_a = c2_coord_list$sa, 
+                                                               coord_b = c2_coord_list$sp,
+                                                               percent_a_to_b = 0.3)
+  
+  c2_coord_list$c2_inf_mid <- jh_get_point_along_line_function(coord_a = c2_coord_list$ia, 
+                                                               coord_b = c2_coord_list$ip,
+                                                               percent_a_to_b = 0.3)
+  
+  c2_hyp <- jh_calculate_distance_between_2_points_function(point_1 = c2_coord_list$sa, 
+                                                            point_2 = c2_coord_list$ia)
+  
+  c2_adj <- jh_calculate_distance_between_2_points_function(point_1 = c(c2_coord_list$ia[1], c2_coord_list$sa[2]), 
+                                                            point_2 = c2_coord_list$ia)
+  
+  c2_tilt_rad <- acos(c2_adj / c2_hyp)
+  
+  c2_tilt_rad * (180 / pi)
+  
+  c2_slope_modifier <- if_else(c2_tilt_rad * (180 / pi) > 0, -1, 1)
+  
+  c2_slope_modifier
+  #### orientation????
+
+  dens_sa_x <- c2_coord_list$sa[1] + sin(c2_tilt_rad)*c2_hyp*c2_slope_modifier
+  dens_sa_y <- c2_coord_list$sa[2] + cos(c2_tilt_rad)*c2_hyp
+  dens_sa <- c(dens_sa_x, 
+               dens_sa_y)
+
+  dens_sp_x <- c2_coord_list$c2_sup_mid[1] + sin(c2_tilt_rad)*c2_hyp
+  dens_sp_y <- c2_coord_list$c2_sup_mid[2] + cos(c2_tilt_rad)*c2_hyp
+  dens_sp <- c(dens_sp_x, 
+               dens_sp_y)
+  
+  odontoid <- st_polygon(list(rbind(dens_sa, 
+                                dens_sp, 
+                                c2_coord_list$c2_inf_mid, 
+                                c2_coord_list$ia, 
+                                dens_sa)))
+  
+  
+  
+xrspine_build_list$spine_geom_list$c1_geom
+# dens_sa, 
+#                                 dens_sp, 
+#                                 c2_coord_list$c2_inf_mid, 
+#                                 c2_coord_list$ia
+```
+
+
+```{r}
+
+  c2_coord_df <- (xrspine_build_list$vert_geom_df %>%
+                    filter(spine_level == "c2"))$vert_coord_df[[1]] %>%
+    distinct()
+
+  c2_coord_list <- map2(c2_coord_df$x, c2_coord_df$y, ~ c(.x, .y)) %>%
+    set_names(c2_coord_df$vert_point)
+
+  c2_coord_list$c2_inf_mid <- jh_get_point_along_line_function(coord_a = c2_coord_list$ia, 
+                                                               coord_b = c2_coord_list$ip,
+                                                               percent_a_to_b = 0.3)
+  
+    c2_coord_list$c2_sup_mid <- jh_get_point_along_line_function(coord_a = c2_coord_list$sa, 
+                                                               coord_b = c2_coord_list$sp,
+                                                               percent_a_to_b = 0.3)
+  
+  c2_hyp <- jh_calculate_distance_between_2_points_function(point_1 = c2_coord_list$sa, 
+                                                  point_2 = c2_coord_list$ia)
+  
+  
+  
+  c2_adj <- jh_calculate_distance_between_2_points_function(point_1 = c(c2_coord_list$ia[1], c2_coord_list$sa[2]), 
+                                                  point_2 = c2_coord_list$ia)
+  
+  c2_tilt_rad <- acos(c2_adj / c2_hyp)
+  
+  
+  #### orientation????
+  
+  # c2_tilt_rad <- c2_tilt*pi/180
+  
+  dens_sa_x <- c2_coord_list$sa[1] + sin(c2_tilt_rad)*c2_height
+  dens_sa_y <- c2_coord_list$sa[2] + cos(c2_tilt_rad)*c2_height
+  dens_sa <- c(dens_sa_x, 
+               dens_sa_y)
+  
+  dens_sp_x <- c2_coord_list$c2_sup_mid[1] + sin(c2_tilt_rad)*c2_height
+  dens_sp_y <- c2_coord_list$c2_sup_mid[2] + cos(c2_tilt_rad)*c2_height
+  dens_sp <- c(dens_sp_x, 
+               dens_sp_y)
+  
+  odontoid <- st_polygon(list(rbind(dens_sa, 
+                                dens_sp, 
+                                c2_coord_list$c2_inf_mid, 
+                                c2_coord_list$ia, 
+                                dens_sa)))
+  
+  buffer_amount <- c2_height*0.2
+  
+  c2_with_odontoid <- st_union(st_buffer(x = st_buffer(x = odontoid, dist = -buffer_amount*0.5), dist = buffer_amount*0.5), 
+                           xrspine_build_list$spine_geom_list$c2_geom)
+  
+  spine_geom_list$c2_geom <- c2_with_odontoid
+  
+  vertebral_coord_dim_sf_df$geometry[23] <- spine_geom_list[23]
+  
+  spine_geom_list$odontoid <- odontoid
+  
+  
+
+```
+
+
+
+```{r}
+c2_coord_df %>%
+    mutate(color_col = c("blue", "green", "orange", "red"))
+```
+
+
+```{r}
+c2_slope <- (xrspine_build_list$vert_geom_df %>%
+    filter(spine_level == "c2"))$vert_angle
+
+c2_slope
+  
+  c2_height <- (xrspine_build_list$vert_geom_df %>%
+    filter(spine_level == "c2"))$vertebral_height
+
+  # c2_width <- (xrspine_build_list$vert_geom_df %>%
+  #   filter(spine_level == "c2"))$vertebral_width
+  
+  c2_coord_df <- (xrspine_build_list$vert_geom_df %>%
+    filter(spine_level == "c2"))$vert_coord_df[[1]] %>%
+    distinct()
+  
+  c2_coord_list <- map2(c2_coord_df$x, c2_coord_df$y, ~ c(.x, .y)) %>%
+  set_names(c2_coord_df$vert_point)
+  
+    c2_coord_list$c2_inf_mid <- jh_get_point_along_line_function(coord_a = c2_coord_list$ia, coord_b = c2_coord_list$ip, percent_a_to_b = 0.1)
+  
+  # c2_slope <- (c2_coord_list$sa[2]-c2_coord_list$sp[2])/(c2_coord_list$sa[1]-c2_coord_list$sp[1])
+  
+  c2_tilt <- (c2_coord_list$sa[2]-c2_coord_list$ia[2])/(c2_coord_list$sa[1]-c2_coord_list$ia[1])
+  
+  #### orientation????
+  
+  c2_tilt_rad <- c2_tilt*pi/180
+  
+  dens_sa_x <- c2_coord_list$ia[1] + sin(c2_tilt_rad)*c2_height*1.5
+  
+  dens_sa_y <- c2_coord_list$ia[2] + cos(c2_tilt_rad)*c2_height*1.5
+  
+  dens_sa <- c(dens_sa_x, 
+               dens_sa_y)
+  
+    dens_sp_x <- c2_coord_list$c2_inf_mid[1] + sin(c2_tilt_rad)*c2_height*1.5
+  
+  dens_sp_y <- c2_coord_list$c2_inf_mid[2] + cos(c2_tilt_rad)*c2_height*1.5
+  
+  dens_sp <- c(dens_sp_x, 
+               dens_sp_y)
+
+dens <- st_polygon(list(rbind(dens_sa, 
+                   dens_sp, 
+                   c2_coord_list$c2_inf_mid, 
+                   c2_coord_list$ia, 
+                   dens_sa)))
+
+c2_with_dens <- st_union(st_buffer(x = st_buffer(x = dens, dist = -5), dist = 5), 
+         xrspine_build_list$spine_geom_list$c2_geom)
+```
+
+
+```{r}
+
+jh_get_point_along_line_function(coord_a = dens_sa, c2_coord_list$sa, percent_a_to_b = 0.5)
+
+  c1_sa <- dens_sa
+  c1_ia_x <- c2_coord_list$ia[1] + sin(c2_tilt_rad)*c2_height*1.5
+  c1_ia_y <- c2_coord_list$ia[2] + sin(c2_tilt_rad)*c2_height*1.5
+  c1_ia <- c(c1_ia_x, 
+               c1_ia_y)
+  
+  c1_sp_x <- c2_coord_list$ip[1] + sin(c2_tilt_rad)*c2_height*1.5
+  c1_sp_y <- c2_coord_list$ip[2] + cos(c2_tilt_rad)*c2_height*1.5
+  c1_sp <- c(dens_sp_x, 
+               dens_sp_y)
+  
+  c1_ip_x <- c2_coord_list$ip[1] + sin(c2_tilt_rad)*c2_height*1.15
+  c1_ip_y <- c2_coord_list$ip[2] + cos(c2_tilt_rad)*c2_height*1.15
+  c1_ip <- c(c1_ip_x, 
+             c1_ip_y)
+  
+
+```
+
+```{r}
+
+st_coordinates(xrspine_build_list$spine_geom_list$odontoid)[1,]
+
+
+
+ggplot() +
+  geom_sf(data = xrspine_build_list$spine_geom_list[20:23], 
+                  fill = "grey90") +
+  geom_sf(data = st_point(c1_sp), color = "green")+
+  geom_sf(data = st_point(c1_sa), color = "red")+
+  geom_sf(data = st_point(c1_ia), color = "orange")+
+  geom_sf(data = st_point(c1_ip), color = "purple") 
+  # geom_sf(data = c2_with_dens, fill = "blue")
+
+
+
+rbind(dens_sa, 
+                   dens_sp, 
+                   c2_coord_list$c2_inf_mid, 
+                   c2_coord_list$ia, 
+                   dens_sa)
+```
+
+
+
+
+
+```{r}
+
+fem_head_center <- c(124.200954008372, 155.110677623747)
+s1_anterior_superior <- c(90.6124226332716, 228.352336316675) 
+s1_posterior_superior <- c(67.2870536227849, 238.61549868129) 
+xr_centroid_df <- tibble(spine_point = c('s1_center', 'l5_centroid', 'l4_centroid', 'l3_centroid', 'l2_centroid', 'l1_centroid', 't12_centroid', 't11_centroid', 't10_centroid', 't9_centroid', 't8_centroid', 't7_centroid', 't6_centroid', 't5_centroid', 't4_centroid', 't3_centroid', 't2_centroid', 't1_centroid', 'c7_centroid', 'c6_centroid', 'c5_centroid', 'c4_centroid', 'c3_centroid', 'c2_centroid'), x = c(78.95, 85.494, 88.746, 83.913, 76.419, 71.952, 74.236, 81.418, 91.098, 100.875, 107.742, 113.596, 119.05, 124.714, 131.199, 137.91, 145.344, 153.124, 158.921, 164.659, 170.301, 175.805, 181.134, 186.246), y = c(233.484, 246.219568978708, 269.871, 293.197, 316.522, 339.848, 361.19, 382.533, 403.876, 425.218, 443.132, 461.046, 478.96, 496.874, 514.788, 530.494, 546.199, 561.905, 573.568, 585.23, 596.893, 608.556, 620.219, 631.881))
+
+
+xrspine_build_list <- build_spine_from_coordinates_function(femoral_head_center = fem_head_center, 
+                                                         s1_anterior_superior = s1_anterior_superior, 
+                                                         s1_posterior_superior = s1_posterior_superior, 
+                                                         centroid_df = xr_centroid_df, 
+                                                         spine_facing = "right")
+
+
+xrspine_build_list$vert_geom_df
+
+
+
+
+# spine_faces <- righ
+  # spine_orientation <- if_else(spine_faces == "left", 1, -1)
+
+spine_orientation <- -1
+
+relative_measure_unit <- st_distance(x = xrspine_build_list$spine_geom_list$c2_geom, xrspine_build_list$spine_geom_list$c7_geom)
+
+relative_measure_unit
+
+  # st_centroid(xrspine_build_list$spine_geom_list$c2_geom)[1]
+  
+  head_center <- st_point(c(st_centroid(xrspine_build_list$spine_geom_list$c2_geom)[1] + spine_orientation*1,
+                            st_centroid(xrspine_build_list$spine_geom_list$c2_geom)[2] +relative_measure_unit))
+  
+  skull <- st_linestring(x = rbind(c(head_center[[1]] -spine_orientation*1, head_center[[2]]- relative_measure_unit*.25),
+                                   c(head_center[[1]] +spine_orientation*1, head_center[[2]])))
+  
+  skull_sf <-  st_buffer(skull, dist = relative_measure_unit, endCapStyle = "ROUND")
+  # ## triangle:
+  jaw <- st_polygon(list(rbind(c(head_center[[1]], head_center[[2]] - relative_measure_unit), ## Most Right point
+                               c(head_center[[1]] - spine_orientation*5.5, head_center[[2]] - relative_measure_unit*0.25), ## top point
+                               c(head_center[[1]] - spine_orientation*5.5, head_center[[2]]- relative_measure_unit*2), ## bottom
+                               c(head_center[[1]], head_center[[2]] - relative_measure_unit)))) ## most right
+  
+  jaw_sf <-  st_buffer(jaw, dist = relative_measure_unit*0.5, endCapStyle = "ROUND")
+
+  head_sf <- st_union(skull_sf, jaw_sf)
+  
+  
+  c2_slope <- (xrspine_build_list$vert_geom_df %>%
+    filter(spine_level == "c2"))$vert_angle
+  
+  c2_height <- (xrspine_build_list$vert_geom_df %>%
+    filter(spine_level == "c2"))$vertebral_height
+  
+  c2_width <- (xrspine_build_list$vert_geom_df %>%
+    filter(spine_level == "c2"))$vertebral_width
+  
+  c2_coord_df <- (xrspine_build_list$vert_geom_df %>%
+    filter(spine_level == "c2"))$vert_coord_df[[1]] %>%
+    distinct()
+  
+  c2_sa <- c((c2_coord_df %>% filter(vert_point == "sa"))$x, (c2_coord_df %>% filter(vert_point == "sa"))$y)
+
+  c2_sp <- c((c2_coord_df %>% filter(vert_point == "sp"))$x, (c2_coord_df %>% filter(vert_point == "sp"))$y)
+  
+  # (c2_coord_df %>% filter(vert_point == "sp"))$x
+  
+  c2_sup_mid <- c((c2_sa[1] + c2_sp[1]) / 2, 
+              (c2_sa[2] + c2_sp[2]) / 2)
+
+  dens_sa_x <- c2_sp[1] - spine_orientation*sin((90-c2_slope)*pi/180)*c2_height*0.5
+  # dens_sa_x <- c2_sp[1] - spine_orientation*sin((c2_slope)*pi/180)*c2_height
+  dens_sa_y <- c2_sp[2] + cos((90-c2_slope)*pi/180)*c2_height*0.5
+    
+  
+  dens_sa <- c(dens_sa_x, 
+               dens_sa_y)
+
+  dens_sp_x <- c2_sup_mid[1] - spine_orientation*sin((90-c2_slope)*pi/180)*c2_height*0.5
+  # dens_sp_x <- c2_sup_mid[1] - spine_orientation*sin((c2_slope)*pi/180)*c2_height
+  
+  dens_sp_y <- c2_sup_mid[2] + cos((90-c2_slope)*pi/180)*c2_height*0.5
+    
+  dens_sp <- c(dens_sp_x, 
+               dens_sp_y)
+  
+
+rbind(c2_sa, dens_sa, dens_sp, c2_sup_mid, c2_sa) %>%
+  as_tibble()
+
+    dens_sf <- st_buffer(st_polygon(list(rbind(c2_sa, 
+                                               dens_sa,
+                                               dens_sp, 
+                                               # dens_sa,
+                                               c2_sup_mid, 
+                                               c2_sa))), dist = 1, endCapStyle = "ROUND")
+
+    # xrspine_build_list$spine_geom_list$c2_geom
+    
+
+    c2_with_dens <- st_union(xrspine_build_list$spine_geom_list$c2_geom, dens_sf)
+    
+    
+    ggplot() +
+          geom_sf(data = xrspine_build_list$vert_geom_df,
+                  color = "black",
+                  aes(geometry = geometry), 
+                  fill = "grey90", 
+                  alpha = 0.8) +
+          geom_path(data =  xrspine_build_list$vert_geom_df, aes(x = x, y = y)) +
+          geom_sf(data = xrspine_build_list$fem_head_sf, 
+                  fill = "grey90") +
+          geom_sf(data = xrspine_build_list$sacrum_sf, 
+                  fill = "grey90", 
+                  alpha = 0.8) +
+          geom_sf(data = xrspine_build_list$lines_list[[1]], 
+                  color = "blue")+
+          geom_sf(data = xrspine_build_list$lines_list[[2]], 
+                  color = "purple")+
+    geom_sf(data = xrspine_build_list$head_sf, alpha = 0.75)+
+    geom_sf(data = c2_with_dens, fill = "red")
+
+    
+  
+```
+
+
+```{r}
+
+relative_measure_unit <- st_distance(x = xrspine_build_list$spine_geom_list$c2_geom, xrspine_build_list$spine_geom_list$c5_geom)
+
+relative_measure_unit
+  # spine_orientation <- if_else(spine_faces == "left", 1, -1)
+  spine_orientation <- -1
+  
+    head_center <- st_point(c(st_centroid(xrspine_build_list$spine_geom_list$c2_geom)[1] + spine_orientation*1,
+                            st_centroid(xrspine_build_list$spine_geom_list$c2_geom)[2] + relative_measure_unit*0.5))
+
+  
+    # skull_sf <-  st_buffer(head_center, dist = relative_measure_unit, endCapStyle = "ROUND")
+    
+    if(spine_orientation == 1){
+         skull <- st_linestring(x = rbind(c(head_center[[1]] - 0.2*relative_measure_unit, head_center[[2]]),
+                                   c(head_center[[1]] + 0.25*relative_measure_unit, head_center[[2]]))) 
+    }else{
+          skull <- st_linestring(x = rbind(c(head_center[[1]] - 0.2*relative_measure_unit, head_center[[2]]),
+                                   c(head_center[[1]] + 0.25*relative_measure_unit, head_center[[2]])))
+    }
+
+    
+    skull_sf <-  st_buffer(skull, dist = relative_measure_unit*0.75, endCapStyle = "ROUND")
+    
+    if(spine_orientation == 1){
+      anterior_skull_point <- as_tibble(st_coordinates(skull_sf)) %>%
+        clean_names() %>%
+        filter(x == min(x))
+    }else{
+      anterior_skull_point <- as_tibble(st_coordinates(skull_sf)) %>%
+        clean_names() %>%
+        filter(x == max(x))
+    }
+    
+    inferior_skull_point <- as_tibble(st_coordinates(skull_sf)) %>%
+      clean_names() %>%
+      filter(y == min(y)) %>%
+      head(1)
+    
+    jaw <- st_polygon(list(rbind(
+      head_center, ## Most Right point
+      c(inferior_skull_point$x, inferior_skull_point$y),
+      c(anterior_skull_point$x, st_centroid(xrspine_build_list$spine_geom_list$c4_geom)[2]), ## bottom jaw
+      c(anterior_skull_point$x, anterior_skull_point$y), ## bottom jaw
+      head_center
+    )
+    )
+    ) 
+    
+    head_sf <- st_buffer(st_union(skull_sf, jaw), dist = 0.3*relative_measure_unit, endCapStyle = "ROUND")
+    
+    
+  
+ggplot() +
+          geom_sf(data = xrspine_build_list$vert_geom_df,
+                  color = "black",
+                  aes(geometry = geometry), 
+                  fill = "grey90", 
+                  alpha = 0.8) +
+          geom_path(data =  xrspine_build_list$vert_geom_df, aes(x = x, y = y)) +
+          geom_sf(data = xrspine_build_list$fem_head_sf, 
+                  fill = "grey90") +
+          geom_sf(data = xrspine_build_list$sacrum_sf, 
+                  fill = "grey90", 
+                  alpha = 0.8) +
+          geom_sf(data = xrspine_build_list$lines_list[[1]], 
+                  color = "blue")+
+          geom_sf(data = xrspine_build_list$lines_list[[2]], 
+                  color = "purple") +
+    geom_sf(data = head_sf, alpha = 0.75)
+  
+```
+
+
+```{r}
+spine_geom_list <- spine_build_list$vert_geom_df$geometry
+
+spine_build_list$vert_geom_df
+
+names(spine_geom_list) <- str_replace_all(spine_build_list$vert_geom_df$spine_point, "centroid", "geom")
+
+s1_midpoint <- c((xr_centroid_df %>% filter(spine_point == "s1_center"))$x, (xr_centroid_df %>% filter(spine_point == "s1_center"))$y)
+
+lines_list <- list()
+  l1pa_line <- st_linestring(rbind(st_centroid(spine_geom_list$l1_geom),
+                                                 xrfem_head_center,
+                                                 s1_midpoint))
+  
+  lines_list$l1pa_line_curve_sf <-   jh_plot_angle_curve_function(vertex_vector = xrfem_head_center, 
+                                                                  line_st_geometry = l1pa_line,
+                                                                  distance_of_curve = st_length(st_linestring(rbind(st_centroid(spine_geom_list$l2_geom),
+                                                                                                                    fem_head_center)))/3)
+  t4pa_line <- st_linestring(rbind(st_centroid(spine_geom_list$t4_geom),
+                                                 xrfem_head_center,
+                                                 s1_midpoint))
+  
+  lines_list$t4pa_line_curve_sf <-   jh_plot_angle_curve_function(vertex_vector = xrfem_head_center, 
+                                                                  line_st_geometry = t4pa_line,
+                                                                  distance_of_curve = st_length(st_linestring(rbind(st_centroid(spine_geom_list$t12_geom),
+                                                                                                                    fem_head_center)))/3)
+
+spine_build_list$spine_geom_list
+  
+  ggplot() +
+          geom_sf(data = spine_build_list$vert_geom_df,
+                  color = "black",
+                  aes(geometry = geometry,
+                      # alpha = geom_alpha,
+                      fill = "grey90"), 
+                  fill = "grey90") +
+  geom_path(data =  spine_build_list$vert_geom_df, aes(x = x, y = y)) +
+  geom_sf(data = spine_build_list$fem_head_sf, 
+                  fill = "grey90") +
+  geom_sf(data = spine_build_list$sacrum_sf, 
+                  fill = "grey90")+
+  geom_sf(data = spine_build_list$lines_list[[1]], 
+                  color = "blue")+
+  geom_sf(data = spine_build_list$lines_list[[2]], 
+                  color = "purple")
+  
+```
+
+```{r}
+# inf sacrupoints
+
+
+
+find_sacrum_inf_point_function <- function(s1_posterior_sup = c(0,0), s1_midpoint = c(1, 1), femoral_heads_center =  c(-1, 0)) {
+  
+  length_s1_to_hips <- jh_calculate_distance_between_2_points_function(s1_midpoint, femoral_heads_center)
+  
+  d_AB <- jh_calculate_distance_between_2_points_function(s1_posterior_sup, s1_midpoint)
+  
+  # Extract coordinates for points A and B
+  x1 <- s1_posterior_sup[1]
+  y1 <- s1_posterior_sup[2]
+  x2 <- s1_midpoint[1]
+  y2 <- s1_midpoint[2]
+  
+  # Calculate the distance between A and B (sanity check)
+  dist_AB <- sqrt((x2 - x1)^2 + (y2 - y1)^2)
+  
+  # Check if provided AB distance matches the actual one
+  if (abs(dist_AB - d_AB) > 1e-6) {
+    stop("Provided distance between A and B does not match the actual distance.")
+  }
+  
+  # Calculate the slope of line AB
+  dx <- x2 - x1
+  dy <- y2 - y1
+  
+  # If AB is vertical (dx = 0), then BC is horizontal
+  if (dx == 0) {
+    C1 <- c(x2 + length_s1_to_hips, y2)  # move right
+    C2 <- c(x2 - length_s1_to_hips, y2)  # move left
+  } 
+  # If AB is horizontal (dy = 0), then BC is vertical
+  else if (dy == 0) {
+    C1 <- c(x2, y2 + length_s1_to_hips)  # move up
+    C2 <- c(x2, y2 - length_s1_to_hips)  # move down
+  } 
+  else {
+    # Slope of the perpendicular line (negative reciprocal)
+    slope_perpendicular <- -dx / dy
+    
+    # Calculate the possible coordinates for C using the perpendicular direction
+    angle <- atan(slope_perpendicular)
+    
+    # Move in both directions along the perpendicular at a distance length_s1_to_hips
+    C1_x <- x2 + length_s1_to_hips * cos(angle)
+    C1_y <- y2 + length_s1_to_hips * sin(angle)
+    
+    C2_x <- x2 - length_s1_to_hips * cos(angle)
+    C2_y <- y2 - length_s1_to_hips * sin(angle)
+    
+    C1 <- c(C1_x, C1_y)
+    C2 <- c(C2_x, C2_y)
+  }
+  
+  # Return both possible coordinates for C
+  # tibble(C1 = list(C1), C2 = list(C2))
+  C2
+}
+
+
+```
+
+
+
+```{r}
+ui <- fluidPage(
+  plotOutput("plot", brush = brushOpts(id = "plot_brush", direction = "y"), dblclick = "plot_reset"), 
+  brushOpts(direction = "y", id = "plot")
+)
+server <- function(input, output, session) {
+  selected <- reactiveVal(rep(FALSE, nrow(mtcars)))
+
+  
+  
+  observeEvent(input$plot_brush, {
+    
+    brushed <- brushedPoints(mtcars, input$plot_brush, allRows = TRUE)$selected_
+    selected(brushed | selected())
+  })
+  observeEvent(input$plot_reset, {
+    selected(rep(FALSE, nrow(mtcars)))
+  })
+
+  output$plot <- renderPlot({
+    mtcars$sel <- selected()
+    ggplot(mtcars, aes(wt, mpg)) + 
+      geom_point(aes(colour = sel)) +
+      scale_colour_discrete(limits = c("TRUE", "FALSE"))
+  }, res = 96)
+}
+shinyApp(ui = ui, server = server)
+
+```
+
+```{r}
+
+
+test_rot_df <- test_df %>%
+  mutate(vert_sf_rot = map2(.x = vert_sf, .y = vert_angle,
+                            .f = ~ rotate_polygon_around_centroid(polygon = .x, angle_degrees = .y)))
+
+
+
+spine_geoms <- st_multipolygon(x = vertebral_coord_dim_sf_df)
+
+test_rotated_df <- test_rot_df %>%
+  mutate(vert_sf_rot = map(.x = vert_sf_rot, .f = ~ st_geometry(st_zm(st_buffer(x = st_buffer(x = .x, dist = -0.8, endCapStyle = "ROUND"), dist = 0.8, endCapStyle = "ROUND")))
+                        )
+         ) %>%
+  rowwise() %>%
+  mutate(geometry = st_sfc(vert_sf_rot)) %>%
+  ungroup()
+
+mean(test_rotated_df$vertebral_height)*0.2
+
+test_rotated_df %>%
+  # vertebral_sf_tibble <- vertebral_coord_dim_sf_df %>%
+  rowwise() %>%
+  mutate(geometry = st_sfc(vert_sf_rot)) %>%
+  ungroup()
+
+  ggplot() + 
+  geom_sf(aes(geometry = vert_sf_rot))
+
+simulation_list$spine_df
+```
+```{r}
+simulation_list$spine_df
+```
+
+
+```{r}
+simulation_list$spine_df
+ggplot() +
+          geom_sf(data = spine_geoms_df,
+                  color = "black",
+                  aes(geometry = geom,
+                      alpha = geom_alpha,
+                      fill = "grey90"))
+
+
+  mutate(vert_sf_rot = st_zm(vert_sf_rot)) %>%
+  mutate(vert_sf_rot = st_sf(vert_sf_rot)) 
+
+  ggplot() + 
+  geom_sf(aes(geometry = vert_sf_rot))
+
+
+test_rot_df$vert_sf_rot[[1]]
+
+
+test_rot_df %>%
+  ggplot() + 
+  geom_sf(aes(geometry = vert_sf_rot)) + 
+  ylim(0, 1000)
+
+ggplot() + 
+  geom_sf(data = test_rot_df$vert_sf_rot)
+  geom_sf(data = st_multipolygon(x = vertebral_coord_dim_sf_df$vert_sf)) +
+  geom_path(data =  vertebral_coord_dim_sf_df, aes(x = x, y = y))
+```
+
+
+```{r}
+click_df <- tibble(spine_point = c('fem_head_center', 's1_anterior_superior', 's1_posterior_superior', 'l4_centroid', 'l1_centroid', 't9_centroid', 't4_centroid', 't1_centroid', 'c2_centroid'), x = c(269.57207668429, 311.651042379208, 351.677375601203, 305.493144960439, 277.782606575981, 206.966786260144, 114.598324978617, 59.1772482097003, 36.5982910075492), y = c(111.902112439368, 213.507419849048, 231.981112105354, 300.744299948268, 398.244342412103, 516.270701774994, 615.82337671175, 655.849709933746, 774.90239336327))
+
+centroid_df <- tibble(spine_point = c('s1_center', 'l5_centroid', 'l4_centroid', 'l3_centroid', 'l2_centroid', 'l1_centroid', 't12_centroid', 't11_centroid', 't10_centroid', 't9_centroid', 't8_centroid', 't7_centroid', 't6_centroid', 't5_centroid', 't4_centroid', 't3_centroid', 't2_centroid', 't1_centroid', 'c7_centroid', 'c6_centroid', 'c5_centroid', 'c4_centroid', 'c3_centroid', 'c2_centroid'), x = c(331.664, 320.595, 305.493, 297.627, 289.055, 277.783, 263.916, 246.968, 227.723, 206.967, 192.331, 176.57, 158.891, 138.498, 114.599, 96.464, 77.591, 59.177, 34.877, 16.186, 5.058, 3.448, 13.31, 36.598), y = c(222.744, 250.044277867074, 300.744, 333.244, 365.744, 398.244, 427.751, 457.258, 486.764, 516.271, 536.181, 556.092, 576.002, 595.913, 615.823, 629.165, 642.508, 655.85, 675.692, 695.534, 715.376, 735.218, 755.06, 774.902))
+
+    xray_click_coordinates_df <- click_df
+    
+    # Labels for spine points that we need to have in the final dataframe
+    spine_coordinate_labels <- tibble(
+      spine_point = c("fem_head_center", "s1_center", "l5_centroid", "l4_centroid", "l3_centroid",
+                      "l2_centroid", "l1_centroid", "t12_centroid", "t11_centroid", "t10_centroid",
+                      "t9_centroid", "t8_centroid", "t7_centroid", "t6_centroid", "t5_centroid",
+                      "t4_centroid", "t3_centroid", "t2_centroid", "t1_centroid", "c7_centroid",
+                      "c6_centroid", "c5_centroid", "c4_centroid", "c3_centroid", "c2_centroid")
+    )
+    
+    fem_head_center <- c(269.57207668429, 111.902112439368) 
+    
+    s1_anterior_superior <- c(311.651042379208, 213.507419849048) 
+    s1_posterior_superior <- c(351.677375601203, 231.981112105354)
+    
+    # Calculate S1 center based on anterior and posterior clicks
+    s1_center <- if ("s1_anterior_superior" %in% names(click_coord_reactive_list$coords) && 
+                     "s1_posterior_superior" %in% names(click_coord_reactive_list$coords)) {
+      s1_anterior <- click_coord_reactive_list$coords$s1_anterior_superior
+      s1_posterior <- click_coord_reactive_list$coords$s1_posterior_superior
+      c((s1_anterior[[1]] + s1_posterior[[1]]) / 2, (s1_anterior[[2]] + s1_posterior[[2]]) / 2)
+    } else {
+      c(NA, NA)
+    }
+    
+    s1_center <- c((s1_anterior_superior[[1]] + s1_posterior_superior[[1]]) / 2, (s1_anterior_superior[[2]] + s1_posterior_superior[[2]]) / 2)
+    
+    # Build the tibble including the S1 center
+    current_coords_df <-  tibble(spine_point = "s1_center", x = s1_center[1], y = s1_center[2]) %>%
+      bind_rows(xray_click_coordinates_df %>%
+                  filter(spine_point != "s1_anterior_superior", 
+                         spine_point != "s1_posterior_superior",
+                         spine_point != "fem_head_center"))
+```
+
+
+```{r}
+current_coords_df <- tibble(spine_point = c('s1_center', 'fem_head_center', 's1_anterior_superior', 's1_posterior_superior', 'l4_centroid', 'l1_centroid', 't9_centroid', 't4_centroid', 't1_centroid', 'c2_centroid'), x = c(148.138321834155, 179.359722025783, 164.025248746836, 132.251394921475, 165.331023561577, 156.625858129971, 218.432532694373, 293.732213677765, 342.48112681173, 355.974133230719), y = c(423.782735587236, 312.941803553653, 414.642311884049, 432.923159290422, 491.247767682182, 603.544401749898, 722.8051681629, 858.605748895952, 929.988112076635, 1051.86042811912))%>%
+                  filter(spine_point != "s1_anterior_superior", 
+                         spine_point != "s1_posterior_superior",
+                         spine_point != "fem_head_center")
+    
+    
+    
+          spine_coordinate_labels_df <- tibble(
+        spine_point = c("s1_center", "l5_centroid",
+                        "l4_centroid", "l3_centroid", "l2_centroid", "l1_centroid", "t12_centroid",
+                        "t11_centroid", "t10_centroid", "t9_centroid", "t8_centroid", "t7_centroid",
+                        "t6_centroid", "t5_centroid", "t4_centroid", "t3_centroid", "t2_centroid",
+                        "t1_centroid", "c7_centroid", "c6_centroid", "c5_centroid", "c4_centroid",
+                        "c3_centroid", "c2_centroid")
+      )%>%
+        mutate(index_count = row_number())
+      
+      spine_coordinates_short_df <- spine_coordinate_labels_df %>%
+        left_join(current_coords_df) %>%
+        filter(!is.na(x))
+      
+      spine_coordinates_short_df
+      
+      l5_centroid_y_adjustment <- (spine_coordinates_short_df %>% filter(spine_point == "s1_center"))$y + ((spine_coordinates_short_df %>% filter(spine_point == "l4_centroid"))$y - (spine_coordinates_short_df %>% filter(spine_point == "s1_center"))$y)*0.35
+      
+      
+      # zoo::na.
+      
+      spine_y_filled_df <- spine_coordinate_labels_df %>%
+        left_join(spine_coordinates_short_df) %>%
+        mutate(y = zoo::na.approx(y, rule = 2)) %>%
+        mutate(y = round(y, 3)) %>%
+        mutate(y = if_else(spine_point == "l5_centroid", l5_centroid_y_adjustment, y))
+      
+      spine_y_filled_df
+      
+      head_df <- spine_coordinates_short_df %>%
+        filter(spine_point == "c2_centroid") %>%
+        mutate(y = y*1.1) %>%
+        mutate(spine_point = "head") %>%
+        mutate(index_count = index_count + 1)
+      
+      spine_coordinate_labels_df %>%
+        left_join(spine_coordinates_short_df) %>%
+        union_all(head_df) %>%
+        # mutate(y = zoo::na.approx(y, rule = 2)) %>%
+        # mutate(y = zoo::na.spline(y))%>%
+    mutate(x = zoo::na.spline(x)) %>% 
+        filter(spine_point != "head") %>%
+        mutate(y = zoo::na.spline(y))%>%
+  ggplot(aes(x = x, y = y)) + 
+  geom_point() + 
+  coord_fixed()
+```
+```{r}
+      c_spine_df <- spine_coordinate_labels_df %>%
+        left_join(spine_coordinates_short_df) %>%
+        # mutate(y = zoo::na.approx(y, rule = 2)) %>%
+        mutate(y = zoo::na.spline(y)) %>%
+  filter(index_count > 17) %>%
+      mutate(x = zoo::na.spline(x)) 
+
+
+spine_coordinate_labels_df %>%
+        left_join(spine_coordinates_short_df) %>%
+        # mutate(y = zoo::na.approx(y, rule = 2)) %>%
+        mutate(y = zoo::na.spline(y)) %>%
+      mutate(x = zoo::na.spline(x)) %>%
+  filter(index_count < 19) %>%
+  union_all(c_spine_df) %>%
+  distinct() %>%
+  ggplot(aes(x = x, y = y)) + 
+  geom_point() + 
+  coord_fixed()
+```
+
+
+```{r}
+spine_y_filled_df <- spine_coordinate_labels_df %>%
+        left_join(spine_coordinates_short_df) %>%
+        mutate(y = zoo::na.approx(y, rule = 2)) %>%
+    mutate(y = zoo::na.spline(y)) %>%
+        mutate(y = round(y, 3)) %>%
+        mutate(y = if_else(spine_point == "l5_centroid", l5_centroid_y_adjustment, y)) 
+
+spine_coordinate_labels_df
+      c_spine_y_filled <- spine_coordinate_labels_df %>%
+        left_join(spine_coordinates_short_df) %>%
+        # mutate(y = zoo::na.approx(y, rule = 2)) %>%
+        filter(index_count > 17) %>%
+        mutate(y = zoo::na.spline(y)) %>%
+        mutate(y = round(y, 3)) %>%
+        mutate(y = if_else(spine_point == "l5_centroid", l5_centroid_y_adjustment, y))  %>%
+        mutate(x = zoo::na.spline(x))%>%
+        mutate(x = round(x, 3)) 
+      
+      spine_y_filled_df
+      
+    final_coords_df <-   spine_y_filled_df %>%
+        # filter(index_count < 18) %>%
+        # union_all(c_spine_y_filled) %>%
+      filter(index_count < 18) %>%
+        mutate(x = zoo::na.spline(x))%>%
+        mutate(x = round(x, 3)) %>%
+        union_all(c_spine_y_filled)
+      
+    spine_y_filled_df %>%
+        filter(index_count < 18)
+    
+c_spine_filled <- spine_y_filled_df %>%
+  filter(index_count > 14) %>%
+        mutate(x = zoo::na.spline(x))%>%
+        mutate(x = round(x, 3)) 
+
+tlspine_filled <- spine_y_filled_df %>%
+  filter(index_count < 15) %>%
+        mutate(x = zoo::na.spline(x))%>%
+        mutate(x = round(x, 3)) 
+
+final_coords_df <- tlspine_filled %>%
+  union_all(c_spine_filled)
+
+final_coords_df %>%
+  ggplot(aes(x = x, y = y)) + 
+  geom_point() + 
+  coord_fixed()
+```
+
+
+
+```{r}
+fem_head_center <- c(124, 153.791666666667) 
+s1_anterior_superior <- c(89.9931069759619, 229.631120232956) 
+s1_posterior_superior <- c(63.6048107216739, 238.584292176375)
+xrcentroid_df <- tibble(spine_point = c('s1_center', 'l5_centroid', 'l4_centroid', 'l3_centroid', 'l2_centroid', 'l1_centroid', 't12_centroid', 't11_centroid', 't10_centroid', 't9_centroid', 't8_centroid', 't7_centroid', 't6_centroid', 't5_centroid', 't4_centroid', 't3_centroid', 't2_centroid', 't1_centroid', 'c7_centroid', 'c6_centroid', 'c5_centroid', 'c4_centroid', 'c3_centroid', 'c2_centroid'), x = c(76.799, 86.044, 87.166, 82.862, 77.055, 73.972, 76.742, 84.105, 93.706, 103.187, 110.709, 116.502, 121.314, 125.894, 130.989, 137.158, 144.199, 151.723, 159.338, 166.656, 173.288, 178.845, 182.938, 185.179), y = c(234.108, 246.724610351247, 270.156, 292.849, 317.021, 341.31, 364.6, 386.747, 407.852, 428.015, 447.322, 465.812, 483.506, 500.429, 516.604, 532.055, 546.81, 560.898, 574.349, 587.19, 599.447, 611.149, 622.323, 632.995))
+
+xrcentroid_df %>%
+  ggplot(aes(x = x, y = y)) +
+  geom_point() +
+  coord_fixed()
+```
+
+```{r}
+
+xrspine_build_list <- build_spine_from_coordinates_function(femoral_head_center = fem_head_center, 
+                                                         s1_anterior_superior = s1_anterior_superior, 
+                                                         s1_posterior_superior = s1_posterior_superior, 
+                                                         centroid_df = xr_centroid_df, 
+                                                         spine_facing = "left")
+
+
+xralignment_parameters_list <- list()
+
+xralignment_parameters_list$pelvic_incidence <- 49
+xralignment_parameters_list$pelvic_tilt <- 30
+xralignment_parameters_list$l1pa <- 15.5
+xralignment_parameters_list$t9pa <- 26
+xralignment_parameters_list$t4pa <- 31.5
+xralignment_parameters_list$c2pa <- 38
+
+xrspine_build_list$segment_angles_list_for_planning$l5_segment_angle
+
+
+xrspine_build_list$segment_angles_list_for_planning
+
+prescribe_l2_s1_segment_angles_function(segment_angles_list = xrspine_build_list$segment_angles_list_for_planning, 
+                                                                   pelvic_incidence = 50, 
+                                                                   rigid_segments = c(), 
+                                                                   l1pa_target_range = c(5 - 3, 5 + 3)
+  )
+
+
+xr_lower_plan <- build_t11_spine_plot_function(pso_option_number = 1, 
+                                          preop_age = 55,
+                                          preop_sex = "female",
+                                          preop_pelvic_incidence = xralignment_parameters_list$pelvic_incidence,
+                                          preop_pt = xralignment_parameters_list$pelvic_tilt,
+                                          preop_l1pa = xralignment_parameters_list$l1pa,
+                                          preop_t9pa = xralignment_parameters_list$t9pa,
+                                          preop_t4pa = xralignment_parameters_list$t4pa,
+                                          preop_c2pa = xralignment_parameters_list$c2pa,
+                                          preop_segment_angles_input_list_reactive = xrspine_build_list$segment_angles_list_for_planning, 
+                                          # preop_segment_angles_input_list_reactive = spine_build_list$segment_angles_list,
+                                          preop_rigid_levels_vector_reactive = c("l1_segment",
+                                                                                 "l2_segment", 
+                                                                                 "l3_segment", 
+                                                                                 "l4_segment"), #preop_rigid_levels_vector_reactive()
+                                          return_list_or_plot = "list"
+    )
+
+xr_lower_plan$prescribed_plot_no_targets
+
+xr_upper_plan <- build_upper_t_uiv_spine_plot_function(pso_option_number = 2, 
+                                          preop_age = 55,
+                                          preop_sex = "female",
+                                          preop_pelvic_incidence = xralignment_parameters_list$pelvic_incidence,
+                                          preop_pt = xralignment_parameters_list$pelvic_tilt,
+                                          preop_l1pa = xralignment_parameters_list$l1pa,
+                                          preop_t9pa = xralignment_parameters_list$t9pa,
+                                          preop_t4pa = xralignment_parameters_list$t4pa,
+                                          preop_c2pa = xralignment_parameters_list$c2pa,
+                                          # preop_segment_angles_input_list_reactive = spine_build_list$segment_angles_list,
+                                          preop_rigid_levels_vector_reactive = c("l1_segment",
+                                                                                 "l2_segment", 
+                                                                                 "l3_segment", 
+                                                                                 "l4_segment"), #preop_rigid_levels_vector_reactive()
+                                          return_list_or_plot = "list"
+    )
+
+xr_upper_plan$alignment_measures_df %>%
+  filter(name %in% c("C2 Tilt", "C2PA", "T4PA", "PT"))%>%
+  mutate(value = paste0(value, "º")) %>%
+  select("Parameter" = name, "Expected" = value) 
+    
+test_df <- xr_lower_plan$regional_targets %>%
+  select("Parameter" = name, "Target" = value)
+
+flextable::flextable(xr_lower_plan$regional_targets %>%
+  select("Parameter" = name, "Target" = value))
+
+```

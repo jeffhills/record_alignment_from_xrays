@@ -1,0 +1,686 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+library(shiny)
+# library(reactlog)
+library(sf)
+library(tidyverse)
+library(ggplot2)
+library(shinyWidgets)
+library(shinyBS)
+# library(kableExtra)
+# library(rms)
+library(svglite)
+library(glue)
+library(cowplot)
+library(janitor)
+# library(rms)
+# library(Hmisc)
+library(cowplot)
+# library(assertr)
+library(lubridate)
+library(shinydashboard)
+library(magick)
+# library(ggforce)
+
+
+library(plotly)
+library(limSolve)
+library(lwgeom)
+
+source("jh_functions.R", local = TRUE)
+source("compute_segment_angles_function_from_sim_data_2024.R", local = TRUE)
+source("function_segment_angles_separated.R", local = TRUE)
+
+source("jh_spine_build_NEW_function.R", local = TRUE)
+
+source("jh_prescribing_alignment_functions.R", local = TRUE)
+
+source("spinal_regional_alignment_analysis_by_vpa.R", local = TRUE)
+
+# source("jh_build_spine_by_vertebral_pelvic_angles_only.R", local = TRUE)
+source("jh_build_spine_by_vertebral_pelvic_angles_cleaned.R", local = TRUE)
+source("prescribing_alignment_by_matching_unfused.R", local = TRUE)
+source("xray_segment_angles_model_functions.R", local = TRUE)
+source("build_spine_from_coordinates_functions.R", local = TRUE)
+
+source("load_means_data.R", local = TRUE)
+
+### VPA ESIMATE FROM NORMAL
+jh_normal_l5pa_function <- function(pelvic_incidence = 51.66) {-3.476013+0.17031351*pelvic_incidence }
+jh_normal_l4pa_function <- function(l5_pelvic_angle = 5.295,pelvic_incidence = 51.66) {-4.3880639+1.7617035*l5_pelvic_angle+0.068625825*pelvic_incidence }
+jh_normal_l3pa_function <- function(l4_pelvic_angle = 8.275,l5_pelvic_angle = 5.295,pelvic_incidence = 51.66) {-1.0916002+1.6875005*l4_pelvic_angle-0.88694017*l5_pelvic_angle-0.012039669*pelvic_incidence }
+jh_normal_l2pa_function <- function(l3_pelvic_angle = 7.605,l4_pelvic_angle = 8.275,l5_pelvic_angle = 5.295,pelvic_incidence = 51.66) {-0.50562689+1.907553*l3_pelvic_angle-1.1962905*l4_pelvic_angle+0.37684618*l5_pelvic_angle-0.0087487413*pelvic_incidence }
+jh_normal_l1pa_function <-   function(l2_pelvic_angle = 5.735,l3_pelvic_angle = 7.605,l4_pelvic_angle = 8.275,l5_pelvic_angle = 5.295,pelvic_incidence = 51.66) {0.09483743+2.1100448*l2_pelvic_angle-1.5056902*l3_pelvic_angle+0.39233091*l4_pelvic_angle+0.02418438*l5_pelvic_angle-0.0042424587*pelvic_incidence }
+jh_normal_l1pa_by_pi_only_function <- function(pelvic_incidence = 51.66) {-21.082545+0.48732945*pelvic_incidence}
+  
+xrfem_head_center <- c(180.734303235947, 314.404362469207) 
+s1_anterior_superior <- c(166.854744816484, 416.958877457462) 
+s1_posterior_superior <- c(129.842589031249, 437.007128507798) 
+xr_centroid_df <- tibble(spine_point = c('s1_center', 'l5_centroid', 'l4_centroid', 'l3_centroid', 'l2_centroid', 'l1_centroid', 't12_centroid', 't11_centroid', 't10_centroid', 't9_centroid', 't8_centroid', 't7_centroid', 't6_centroid', 't5_centroid', 't4_centroid', 't3_centroid', 't2_centroid', 't1_centroid', 'c7_centroid', 'c6_centroid', 'c5_centroid', 'c4_centroid', 'c3_centroid', 'c2_centroid'), x = c(148.349, 161.969, 164.541, 159.987, 154.061, 152.975, 161.299, 177.016, 196.465, 215.985, 232.741, 247.209, 260.693, 274.494, 289.917, 307.572, 325.302, 340.26, 350.26, 355.772, 357.929, 357.864, 356.71, 355.6), y = c(426.983, 449.922828703687, 492.525, 529.107, 566.192, 602.02, 635.247, 666.19, 695.58, 724.15, 752.464, 780.42, 807.752, 834.189, 859.465, 883.415, 906.29, 928.447, 950.208, 971.766, 993.282, 1014.917, 1036.831, 1059.185))
+
+s1_midpoint <- jh_get_point_along_line_function(coord_a = s1_anterior_superior, coord_b = s1_posterior_superior, percent_a_to_b = 0.5)
+
+inf_sacrum_vec <- jh_find_sacrum_inf_point_function(s1_posterior_sup = s1_posterior_superior,
+                                                    s1_anterior_sup = s1_anterior_superior,
+                                                    # s1_midpoint = s1_midpoint, 
+                                                    # femoral_heads_center = xrfem_head_center,
+                                                    spine_facing = "right")
+
+xr_pi <- jh_calculate_vertex_angle(vertex_coord = s1_midpoint, 
+                          posterior_point_coord = inf_sacrum_vec, 
+                          ventral_point_coord = xrfem_head_center,
+                          spine_orientation = "right")
+
+
+xrspine_build_list <- jh_build_spine_from_coordinates_function(femoral_head_center = xrfem_head_center, 
+                                                               s1_anterior_superior = s1_anterior_superior, 
+                                                               s1_posterior_superior = s1_posterior_superior,
+                                                               centroid_df = xr_centroid_df,
+                                                               spine_facing = "right")
+
+
+```
+
+
+```{r}
+xr_centroid_df
+xr_centroid_df %>%
+  filter(spine_point %in% c("s1_center", "fem_head_center")) %>%
+        mutate(
+          x = x * 8,
+          y = y * 8
+        ) %>%
+        select(spine_point, x, y) %>%
+        mutate(point_coord = map2(.x = x, .y = y, .f = ~ c(.x, .y))) %>%
+        select(spine_point, point_coord) %>%
+        pivot_wider(names_from = spine_point, values_from = point_coord) 
+        mutate(pelvic_thickness_scaled_computed = map2(.x = s1_center, .y = fem_head_center, 
+                                        .f = ~ jh_calculate_distance_between_2_points_function(point_1 = .x, point_2 = .y))) 
+
+xray_centroid_coordinates_reactive_df() %>%
+        filter(spine_point %in% c("s1_center", "fem_head_center")) %>%
+        mutate(
+          x = x * scaling_factor,
+          y = y * scaling_factor
+        ) %>%
+        select(spine_point, x, y) %>%
+        mutate(point_coord = map2(.x = x, .y = y, .f = ~ c(.x, .y))) %>%
+        select(spine_point, point_coord) %>%
+        pivot_wider(names_from = spine_point, values_from = point_coord) %>%
+        mutate(pelvic_thickness_scaled_computed = map2(.x = s1_center, .y = fem_head_center, 
+                                        .f = ~ jh_calculate_distance_between_2_points_function(point_1 = .x, point_2 = .y))) %>%
+        unnest(pelvic_thickness_scaled_computed) %>%
+        pull(pelvic_thickness_scaled_computed)
+```
+
+```{r}
+export_and_scale_redcap_coord_data_function <- function(redcap_rcon){
+ redcap_df <- exportRecordsTyped(rcon = rcon_reactive) %>%
+  as_tibble() %>%
+  clean_names() %>%
+  mutate(x = as.double(x_coord), y = as.double(y_coord)) %>%
+  select(-x_coord, -y_coord)
+
+### first center all the coordinates so that femoral heads are at 0,0
+
+ fem_heads_coord_df <-  redcap_df %>%
+  filter(redcap_repeat_instrument == "spine_coordinates", 
+         spine_coordinates_complete == "Complete") %>%
+  remove_empty() %>%
+  filter(spine_level_coord == "femoral_heads") %>%
+  select(record_id, fem_head_x = x, fem_head_y = y)
+ 
+ 
+vert_centroids_xy_df <- redcap_df %>%
+  filter(redcap_repeat_instrument == "spine_coordinates", 
+         spine_coordinates_complete == "Complete") %>%
+  remove_empty() %>%
+  select(record_id, spine_level = spine_level_coord, vert_point = vert_point_coord, x, y) %>%
+  filter(vert_point %in% c("center", "centroid"))%>%
+  left_join(fem_heads_coord_df) %>%
+  mutate(x = x - fem_head_x, y = y - fem_head_y) %>%
+  select(-fem_head_x, -fem_head_y)
+
+## now pull the calibration length measures
+calibration_measures_df <- redcap_df %>%
+  filter(spine_calibration_complete == "Complete") %>%
+  remove_empty() %>%
+  select(record_id, c2_centroid_s1_center_length) %>%
+  mutate(c2_centroid_s1_center_length = as.double(c2_centroid_s1_center_length))
+
+## now compute the xy distance with the current coordiante system
+redcap_xy_length_df <- vert_centroids_xy_df %>%
+  filter(spine_level %in% c("sacrum", "c2")) %>%
+  select(-vert_point) %>%
+  group_by(record_id, spine_level) %>%
+  mutate(point_coord = map2(.x = x, .y = y, .f = ~ c(.x, .y))) %>%
+  select(record_id, spine_level, point_coord) %>%
+  ungroup() %>%
+  pivot_wider(names_from = spine_level, values_from = point_coord) %>%
+  mutate(c2_sacrum_xy_dist = map2(.x = sacrum, .y = c2, .f = ~ jh_calculate_distance_between_2_points_function(point_1 = .x, point_2 = .y)))  %>%
+  unnest(c2_sacrum_xy_dist) %>%
+  select(record_id, c2_sacrum_xy_dist) %>%
+  distinct()
+
+## joint and compute the scaling factor
+scaling_factor_df <- calibration_measures_df %>%
+  left_join(redcap_xy_length_df) %>%
+  mutate(scaling_factor = c2_centroid_s1_center_length/c2_sacrum_xy_dist) %>%
+  select(record_id, scaling_factor)
+
+
+vert_coord_scaled_df <- vert_centroids_xy_df %>%
+  left_join(scaling_factor_df) %>%
+    mutate(
+    x = x * scaling_factor,
+    y = y * scaling_factor
+  ) %>%
+  select(record_id, spine_level, vert_point, x, y)
+
+full_redcap_scaled <- redcap_df %>%
+  filter(redcap_repeat_instrument == "spine_coordinates") %>%
+  select(record_id, spine_level = spine_level_coord, vert_point = vert_point_coord, x, y) %>%
+    left_join(fem_heads_coord_df) %>%
+  mutate(x = x - fem_head_x, y = y - fem_head_y) %>%
+  select(-fem_head_x, -fem_head_y) %>%
+  left_join(scaling_factor_df) %>%
+    mutate(
+    x = x * scaling_factor,
+    y = y * scaling_factor
+  ) %>%
+  select(record_id, spine_level, vert_point, x, y)
+
+## quality control
+quality_check_df <- vert_coord_scaled_df %>%
+  filter(spine_level %in% c("sacrum", "c2")) %>%
+  select(-vert_point) %>%
+  group_by(record_id, spine_level) %>%
+  mutate(point_coord = map2(.x = x, .y = y, .f = ~ c(.x, .y))) %>%
+  select(record_id, spine_level, point_coord) %>%
+  ungroup() %>%
+  pivot_wider(names_from = spine_level, values_from = point_coord) %>%
+  mutate(c2_sacrum_xy_dist = map2(.x = sacrum, .y = c2, .f = ~ jh_calculate_distance_between_2_points_function(point_1 = .x, point_2 = .y)))  %>%
+  unnest(c2_sacrum_xy_dist) %>%
+  select(record_id, c2_sacrum_xy_dist) %>%
+  distinct() %>%
+  left_join(calibration_measures_df) %>%
+  ungroup() %>%
+  mutate(c2_sacrum_xy_dist = round(c2_sacrum_xy_dist, 1), 
+         c2_centroid_s1_center_length = round(c2_centroid_s1_center_length, 1)) %>%
+  mutate(quality_check = if_else(c2_sacrum_xy_dist == c2_centroid_s1_center_length, TRUE, FALSE))
+
+# all(quality_check_df$quality_check)
+
+length_to_fem_heads_df <- vert_coord_scaled_df %>%
+  mutate(point_coord = map2(.x = x, .y = y, .f = ~ c(.x, .y))) %>%
+  left_join(vert_coord_scaled_df %>%
+  mutate(point_coord = map2(.x = x, .y = y, .f = ~ c(.x, .y))) %>%
+  filter(spine_level == "femoral_heads") %>%
+  select(record_id, fem_head_coord = point_coord)
+  ) %>%
+  select(record_id, spine_level, point_coord, fem_head_coord) %>%
+    mutate(length_to_fem_heads = map2(.x = fem_head_coord, .y = point_coord, 
+                                      .f = ~ jh_calculate_distance_between_2_points_function(point_1 = .x, point_2 = .y))) %>%
+  unnest(length_to_fem_heads) %>%
+  select(record_id, spine_level, length_to_fem_heads)
+
+scaled_df <- vert_coord_scaled_df %>%
+  select(record_id, spine_level, x, y) %>%
+  left_join(length_to_fem_heads_df)
+
+
+full_redcap_scaled <- full_redcap_scaled %>%
+  mutate(point_coord = map2(.x = x, .y = y, .f = ~ c(.x, .y))) %>%
+  mutate(fem_head_coord = map2(.x = x, .y = y, .f = ~ c(0, 0))) %>%
+  mutate(length_to_fem_heads = map2(.x = fem_head_coord, .y = point_coord, 
+                                      .f = ~ jh_calculate_distance_between_2_points_function(point_1 = .x, point_2 = .y))) %>%
+  unnest(length_to_fem_heads) %>%
+  select(record_id, spine_level, vert_point, x, y, length_to_fem_heads)
+
+
+pelvic_thickness_check_df <- redcap_df %>%
+  filter(spine_calibration_complete == "Complete") %>%
+  remove_empty() %>%
+  mutate(pelvic_thickness = as.double(pelvic_thickness)) %>%
+  select(record_id, pelvic_thickness)
+
+pelvic_thickness_error_plot <- vert_coord_scaled_df %>%
+  filter(spine_level %in% c("femoral_heads", "sacrum")) %>%
+  mutate(point_coord = map2(.x = x, .y = y, .f = ~ c(.x, .y))) %>%
+  select(record_id, spine_level, point_coord) %>%
+  pivot_wider(names_from = spine_level, values_from = point_coord) %>%
+  mutate(pelvic_thickness_from_xrays = map2(.x = femoral_heads, .y = sacrum, .f = ~ jh_calculate_distance_between_2_points_function(point_1 = .x, point_2 = .y))) %>%
+  unnest(pelvic_thickness_from_xrays) %>%
+  select(record_id, pelvic_thickness_from_xrays) %>%
+  left_join(pelvic_thickness_check_df) %>%
+  mutate(pelvic_thickness_error_mm = round(abs(pelvic_thickness_from_xrays - pelvic_thickness), 1)) %>%
+  select(record_id, pelvic_thickness_error_mm) %>%
+  ggplot(aes(y = pelvic_thickness_error_mm)) +
+  geom_boxplot() +
+  jh_theme_function()
+
+
+
+### PLOT ALL SPINES
+
+femoral_heads_df <- full_redcap_scaled %>%
+  filter(spine_level == "femoral_heads") %>%
+  select(record_id, fem_head_x = x, fem_head_y = y)
+
+for_plotting_spines_df <- full_redcap_scaled %>%
+  filter(vert_point %in% c("sp", "sa", "ia", "ip")) %>%
+  mutate(vert_point_count = case_when(
+    vert_point == "sp" ~ 1, 
+    vert_point == "sa" ~ 2, 
+    vert_point == "ia" ~ 3, 
+    vert_point == "ip" ~ 4
+  )) %>%
+  union_all(full_redcap_scaled %>%
+  filter(vert_point == "sp") %>%
+  mutate(vert_point_count = 5)) %>%
+  mutate(spine_level = fct_inorder(spine_level)) %>%
+  arrange(record_id, spine_level, vert_point_count) %>%
+  left_join(femoral_heads_df)
+
+
+unique_ids <- unique(for_plotting_spines_df$record_id)
+
+# Create an empty list to store the data frames
+plotting_df_list <- list()
+
+# Split the unique IDs into groups of 10
+id_chunks <- split(unique_ids, ceiling(seq_along(unique_ids) / 10))
+
+# For each chunk, filter the tibble and add the subset to the list
+for (i in seq_along(id_chunks)) {
+  plotting_df_list[[i]] <- for_plotting_spines_df %>% filter(record_id %in% id_chunks[[i]])
+}
+
+names(plotting_df_list) <- paste0("seq_", c(1:length(plotting_df_list)))
+
+
+plot_list <- map(.x = plotting_df_list, 
+                 .f = ~ .x %>%
+                   ggplot()+
+                   geom_path(aes(x = x, y = y)) +
+                   geom_point(aes(x = fem_head_x, y = fem_head_y)) + 
+                   theme_void() + 
+                   facet_wrap(facets = "record_id", nrow = 1) +
+                   coord_fixed()
+)
+
+names(plot_list) <- names(plotting_df_list)
+
+
+full_redcap_scaled_coordinates_df <- full_redcap_scaled %>%
+  filter(spine_level %in% c("sacrum"), vert_point %in% c("sp", "sa")) %>%
+  union_all(scaled_df %>% mutate(vert_point = if_else(spine_level == "sacrum", "superior_center", "centroid"))) %>%
+  arrange(record_id, y)
+
+
+if(all(quality_check_df$quality_check)){
+  return(list(full_redcap_scaled_coordinates_df = full_redcap_scaled_coordinates_df,
+              scaled_df = scaled_df, 
+              full_redcap_df = redcap_df, 
+              full_redcap_scaled = full_redcap_scaled,
+              plot_list = plot_list,
+              pelvic_thickness_error_plot = pelvic_thickness_error_plot))
+}else{
+  return("There is an error somewhere")
+}
+
+}
+```
+
+
+```{r}
+redcap_token <- "6DDC3E7AB46DC526ECF3F1A366A4A7DD"
+redcap_url <-  'https://redcap.uthscsa.edu/REDCap/api/'
+rcon_reactive <- redcapConnection(url = redcap_url, token = redcap_token, config =  httr::config(ssl_verifypeer = FALSE))     
+
+means_csv_file <- read_csv(file = "means_vpa_measures.csv")
+
+# c2_tilt_for_opensim_df <- read_csv(file = "c2_tilt_corrected_df_for_opensim.csv")
+
+normative_measures_for_simulations <- read_csv("data/normative_measures_for_simulations.csv") %>%
+  clean_names()  %>%
+  select(patient_id, age, bmi, sex, length_s1_sup_center_to_hips, length_c2_to_s1_sup_center) %>%
+  mutate(patient_id = as.character(patient_id)) %>%
+  mutate(id_length = str_length(patient_id)) %>%
+  mutate(patient_id = case_when(
+    id_length == 1 ~ paste0("000", patient_id),
+    id_length == 2 ~ paste0("00", patient_id),
+    id_length == 3 ~ paste0("0", patient_id),
+    id_length == 4 ~ paste0(patient_id)
+                                )) %>%
+  select(-id_length) %>%
+  # mutate(record_id = patient_id, means_data_complete = "Complete") %>%
+  select(record_id = patient_id, everything())
+
+      
+means_data_df <- means_csv_file %>%
+  mutate(patient_id = as.character(patient_id)) %>%
+  mutate(id_length = str_length(patient_id)) %>%
+  mutate(patient_id = case_when(
+    id_length == 1 ~ paste0("000", patient_id), 
+    id_length == 2 ~ paste0("00", patient_id), 
+    id_length == 3 ~ paste0("0", patient_id), 
+    id_length == 4 ~ paste0(patient_id)
+                                )) %>%
+  select(-id_length) %>%
+  # mutate(record_id = patient_id, means_data_complete = "Complete") %>%
+  select(record_id = patient_id, everything())
+
+# means_data_df
+
+means_data_df %>%
+  select(record_id)
+
+# write_csv(x = means_data_df %>%
+#   select(record_id), file = "means_record_ids.csv")
+
+```
+
+```{r}
+scaled_redcap_list <- export_and_scale_redcap_coord_data_function(redcap_rcon = rcon_reactive)
+
+rec_1_df <- scaled_redcap_list$full_redcap_scaled %>%
+  filter(spine_level %in% c("femoral_heads", "sacrum")) %>%
+  filter(vert_point %in% c("center", "sp", "sa")) %>%
+  filter(record_id == "0001") %>%
+  union_all(scaled_redcap_list$scaled_df %>%
+  filter(record_id == "0001")%>%
+  filter(spine_level %in% c("femoral_heads", "sacrum") == FALSE) %>%
+    select(-length_to_fem_heads) %>%
+  mutate(vert_point = "centroid"))
+
+
+scaled_redcap_list$full_redcap_scaled_coordinates_df %>%
+  select(record_id) %>%
+  distinct()
+
+# write_csv(x = scaled_redcap_list$full_redcap_scaled_coordinates_df, file = "first_18_scaled_coordinates.csv")
+
+# getwd()
+# 
+scaled_redcap_list$scaled_df %>%
+  filter(record_id == "0001")
+# NEED ANTERIOR AND POSTERIOR S1 ENDPLATES
+
+rec_1_df
+
+
+scaled_redcap_list$full_redcap_df %>%
+  select(record_id, spine_level_coord, vert_point_coord, x, y)
+
+
+
+scaled_redcap_list$full_redcap_scaled %>%
+  filter(spine_level %in% c("sacrum"), vert_point %in% c("sp", "sa")) %>%
+  union_all(scaled_redcap_list$scaled_df %>% mutate(vert_point = if_else(spine_level == "sacrum", "superior_center", "centroid"))) %>%
+  arrange(record_id, y)
+  
+scaled_redcap_list$full_redcap_scaled_coordinates_df %>%
+  filter(spine_level == "c2")
+
+ height_xy_df <- scaled_redcap_list$full_redcap_df %>%
+   select(record_id, height) %>%
+   filter(!is.na(height)) %>%
+   left_join(scaled_redcap_list$full_redcap_scaled_coordinates_df %>%
+  filter(spine_level == "c2")) %>%
+   mutate(height = as.double(height))
+
+height_xy_df
+library(rms)
+
+Function(ols(height ~ y, data = height_xy_df))
+
+
+height_xy_df %>%
+  ggplot(aes(x = y, y = height)) + 
+  geom_point() + 
+  geom_smooth() + 
+  jh_theme_function() 
+
+
+height_xy_df %>%
+  filter(height == 1634)
+```
+
+
+```{r}
+    last_completed_id <- exportRecordsTyped(rcon = rcon_reactive) %>%
+      filter(spine_coordinates_complete == "Complete") %>%
+      as_tibble() %>%
+      select(record_id) %>%
+      distinct() %>%
+      mutate(record_id = as.character(record_id)) %>%
+      tail(1) %>%
+      pull(record_id)
+
+last_completed_id
+
+    all_recs_df <- exportRecordsTyped(rcon = rcon_reactive, fields = "record_id")
+
+    
+    all_recs_df
+    
+    next_record_index <- which(all_recs_df$record_id == last_completed_id) +1
+    
+    which(all_recs_df$record_id == last_completed_id) + 7
+
+    next_redcap_record_id_needed_reactiveval$next_redcap_record <-  all_recs_df$record_id[next_record_index]
+
+    all_recs_df$record_id[27]
+    
+    which(all_recs_df$record_id == last_completed_id) + c(1:10)
+    
+    
+    all_recs_df$record_id[c(21:30)]
+    
+    all_recs_df$record_id
+```
+
+```{r}
+
+ all_redcap_df <- exportRecordsTyped(rcon = rcon_reactive) %>%
+  as_tibble() %>%
+  clean_names() %>%
+  mutate(x = as.double(x_coord), y = as.double(y_coord)) %>%
+  select(-x_coord, -y_coord)
+
+all_redcap_df %>%
+  select(record_id) %>%
+  distinct()
+
+
+test_imported_df <- exportRecordsTyped(rcon = rcon_reactive, records = "0018") %>%
+        type.convert() %>%
+        select(record_id, pelvic_incidence, pelvic_tilt, contains("pelvic_angle")) %>%
+        pivot_longer(cols = -record_id, names_to = "measure", values_to = "value") %>%
+        filter(!is.na(value))%>%
+        mutate(measure = str_replace_all(measure, "_pelvic_angle", "PA")) %>%
+        mutate(measure = str_replace_all(measure, "pelvic_incidence", "PI")) %>%
+        mutate(measure = str_replace_all(measure, "pelvic_tilt", "PT")) %>%
+        mutate(measure = str_to_upper(measure)) %>%
+        select(id = record_id, measure, value)
+
+exportRecordsTyped(rcon = rcon_reactive, records = "0018") %>%
+        type.convert() %>%
+  select(record_id, pelvic_thickness) %>%
+    pull(pelvic_thickness) %>%
+  as.double()
+```
+
+
+
+```{r}
+testjh_find_sacrum_inf_point_function <- function(s1_posterior_sup = c(0,0), 
+                                           s1_anterior_sup = c(1, 1), 
+                                           spine_facing = "right") {
+  
+  inf_s1_line_length <- jh_calculate_distance_between_2_points_function(s1_posterior_sup, s1_anterior_sup)*2.5
+  
+  s1_center <- jh_get_point_along_line_function(coord_a = s1_posterior_sup, coord_b = s1_anterior_sup)
+  
+  
+    # Extract coordinates for points A and B
+  x1 <- s1_posterior_sup[1]
+  y1 <- s1_posterior_sup[2]
+  x2 <- s1_anterior_sup[1]
+  y2 <- s1_anterior_sup[2]
+  
+    # Calculate the slope of sacrum
+  dx <- x2 - x1
+  dy <- y2 - y1
+  
+   # Check for vertical line case (when dx = 0)
+  if (dx == 0) {
+    # Line is vertical, so perpendicular line is horizontal
+    # Determine the direction based on spine_facing
+    if (spine_facing == "right") {
+      inferior_sacrum <- c(s1_center[1] + inf_s1_line_length, s1_center[2])
+    } else {
+      inferior_sacrum <- c(s1_center[1] - inf_s1_line_length, s1_center[2])
+    }
+  } else {
+    # Calculate the perpendicular slope
+    perp_slope <- -dx / dy
+    
+    # Calculate the angle of the perpendicular line
+    angle_perp <- atan(perp_slope)
+    
+    # Determine direction based on spine_facing
+    if (spine_facing == "right") {
+      inferior_sacrum_x <- s1_center[1] - inf_s1_line_length * cos(angle_perp)
+      inferior_sacrum_y <- s1_center[2] - inf_s1_line_length * sin(angle_perp)
+    } else {
+      inferior_sacrum_x <- s1_center[1] + inf_s1_line_length * cos(angle_perp)
+      inferior_sacrum_y <- s1_center[2] - inf_s1_line_length * sin(angle_perp)
+    }
+    
+    # Set the coordinates for inferior_sacrum
+    inferior_sacrum <- c(x = inferior_sacrum_x, y = inferior_sacrum_y)
+  }
+  
+  # Return the coordinates for inferior_sacrum
+  return(inferior_sacrum)
+
+  
+}
+
+xrfem_head_center <- c(180.734303235947, 314.404362469207) 
+s1_anterior_superior <- c(166.854744816484, 416.958877457462) 
+s1_posterior_superior <- c(129.842589031249, 437.007128507798) 
+xr_centroid_df <- tibble(spine_point = c('s1_center', 'l5_centroid', 'l4_centroid', 'l3_centroid', 'l2_centroid', 'l1_centroid', 't12_centroid', 't11_centroid', 't10_centroid', 't9_centroid', 't8_centroid', 't7_centroid', 't6_centroid', 't5_centroid', 't4_centroid', 't3_centroid', 't2_centroid', 't1_centroid', 'c7_centroid', 'c6_centroid', 'c5_centroid', 'c4_centroid', 'c3_centroid', 'c2_centroid'), x = c(148.349, 161.969, 164.541, 159.987, 154.061, 152.975, 161.299, 177.016, 196.465, 215.985, 232.741, 247.209, 260.693, 274.494, 289.917, 307.572, 325.302, 340.26, 350.26, 355.772, 357.929, 357.864, 356.71, 355.6), y = c(426.983, 449.922828703687, 492.525, 529.107, 566.192, 602.02, 635.247, 666.19, 695.58, 724.15, 752.464, 780.42, 807.752, 834.189, 859.465, 883.415, 906.29, 928.447, 950.208, 971.766, 993.282, 1014.917, 1036.831, 1059.185))
+
+s1_midpoint <- jh_get_point_along_line_function(coord_a = s1_anterior_superior, coord_b = s1_posterior_superior, percent_a_to_b = 0.5)
+
+
+sacrum_inf_test <- testjh_find_sacrum_inf_point_function(s1_posterior_sup = s1_posterior_superior, s1_anterior_sup = s1_anterior_superior, spine_facing = "left")
+
+xr_centroid_df %>%
+  mutate(dot_color = "green") %>%
+  add_row(spine_point = "sacrum_inf", x = sacrum_inf_test[1], y = sacrum_inf_test[2], dot_color = "red") %>%
+  ggplot(aes(x = x, y = y, color = dot_color)) + 
+  geom_point() +
+  coord_fixed() + 
+  scale_color_identity()
+
+
+```
+
+
+```{r}
+spine_calibrate_1_df <- tibble(c2_centroid_s1_center_length = 543, 
+                                            spine_calibration_complete = "Complete")%>%
+  mutate(record_id = "0001") %>%
+        select(record_id, everything())
+        
+        spine_calibrate_1_df
+        
+        
+        exportInstruments(rcon = rcon_reactive)
+
+# importRecords(rcon = rcon_reactive, data = spine_calibrate_1_df, returnContent = "count")
+        
+        # importRecords(rcon = rcon_reactive, data = pelvic_thickness_means_df, returnContent = "count")
+        
+        xrlast_completed_id <- exportRecordsTyped(rcon = rcon_reactive) %>%
+      filter(spine_coordinates_complete == "Complete") %>%
+      as_tibble() %>%
+      select(record_id) %>%
+      distinct() %>%
+      mutate(record_id = as.character(record_id)) %>%
+      tail(1) %>%
+      pull(record_id)
+        
+thickness <- exportRecordsTyped(rcon = rcon_reactive, records = "0005", 
+                                fields = "pelvic_thickness")
+
+thickness$pelvic_thickness
+
+```
+
+
+```{r}
+c2_centroid_df <- rec1 %>%
+  filter(redcap_repeat_instrument == "spine_coordinates") %>%
+  remove_empty() %>%
+  as_tibble() %>%
+  filter(vert_point_coord == "centroid") %>%
+  filter(spine_level_coord == "c2") %>%
+  select(record_id, spine_level_coord, vert_point_coord, x = x_coord, y= y_coord) 
+
+c2_centroid <- c(c2_centroid_df$x[[1]], c2_centroid_df$y[[1]])
+
+c2_centroid
+
+sacrum_df <- rec1 %>%
+  filter(redcap_repeat_instrument == "spine_coordinates") %>%
+  remove_empty() %>%
+  as_tibble() %>%
+  filter(spine_level_coord == "sacrum")%>%
+  filter(vert_point_coord == "center")%>%
+  select(record_id, spine_level_coord, vert_point_coord, x = x_coord, y= y_coord) 
+  
+sacrum_coord <- c(sacrum_df$x[[1]], sacrum_df$y[[1]])
+
+sacrum_coord
+
+rec_1_c2_to_s1_center_length <- jh_calculate_distance_between_2_points_function(point_1 = c2_centroid, point_2 = sacrum_coord)
+
+
+rec_1_c2_to_s1_center_length
+
+```
+```{r}
+
+fem_heads_sacrum_df <- rec1 %>%
+  filter(redcap_repeat_instrument == "spine_coordinates") %>%
+  remove_empty() %>%
+  as_tibble() %>%
+  filter(spine_level_coord %in% c("femoral_heads", "sacrum")) %>%
+  filter(vert_point_coord %in% c("center", "sp", "sa")) %>%
+  select(record_id, level = spine_level_coord, vert_point = vert_point_coord, x = x_coord, y = y_coord)
+
+
+rec_1_coordinates_long_df <- fem_heads_sacrum_df %>%
+  union_all(rec1 %>%
+  filter(redcap_repeat_instrument == "spine_coordinates") %>%
+  remove_empty() %>%
+  as_tibble() %>%
+  filter(vert_point_coord == "centroid")%>%
+  select(record_id, level = spine_level_coord, vert_point = vert_point_coord, x = x_coord, y = y_coord))
+
+
+rec_1_coordinates_long_df
+
+# write_csv(x = rec_1_coordinates_long_df, file =  "data/rec_1_coordinates_long_df.csv")
+```
+
+

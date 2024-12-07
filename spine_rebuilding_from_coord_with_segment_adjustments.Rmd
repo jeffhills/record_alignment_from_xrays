@@ -1,0 +1,649 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+library(shiny)
+# library(reactlog)
+library(sf)
+library(tidyverse)
+library(ggplot2)
+library(shinyWidgets)
+library(shinyBS)
+# library(kableExtra)
+# library(rms)
+library(svglite)
+library(glue)
+library(cowplot)
+library(janitor)
+# library(rms)
+# library(Hmisc)
+library(cowplot)
+# library(assertr)
+library(lubridate)
+library(shinydashboard)
+library(magick)
+# library(ggforce)
+library(plotly)
+
+library(lwgeom)
+
+source("jh_functions.R", local = TRUE)
+source("compute_segment_angles_function_from_sim_data_2024.R", local = TRUE)
+source("function_segment_angles_separated.R", local = TRUE)
+
+source("jh_spine_build_NEW_function.R", local = TRUE)
+
+source("jh_prescribing_alignment_functions.R", local = TRUE)
+
+source("spinal_regional_alignment_analysis_by_vpa.R", local = TRUE)
+
+# source("jh_build_spine_by_vertebral_pelvic_angles_only.R", local = TRUE)
+source("jh_build_spine_by_vertebral_pelvic_angles_cleaned.R", local = TRUE)
+source("prescribing_alignment_by_matching_unfused.R", local = TRUE)
+source("xray_segment_angles_model_functions.R", local = TRUE)
+source("build_spine_from_coordinates_functions.R", local = TRUE)
+
+# 
+# rotate_vertebra <- function(vertebra, point_of_rotation, segment_angle_adjustment) {
+#   # Extract the coordinates from the vertebra geometry
+#   vertebra_coords <- st_coordinates(vertebra)
+#   
+#   # Ensure point_of_rotation is a numeric vector
+#   point_of_rotation <- as.numeric(point_of_rotation)
+#   
+#   # Convert the angle from degrees to radians
+#   angle_radians <- segment_angle_adjustment * pi / 180
+#   
+#   # Define the rotation matrix
+#   rotation_matrix <- matrix(c(cos(angle_radians), -sin(angle_radians), 
+#                               sin(angle_radians), cos(angle_radians)), 
+#                             nrow = 2, byrow = TRUE)
+#   
+#   # Translate the vertebra coordinates so the point_of_rotation is at the origin
+#   translated_coords <- t(t(vertebra_coords[, 1:2]) - point_of_rotation)
+#   
+#   # Apply the rotation matrix to the translated coordinates
+#   rotated_coords <- translated_coords %*% rotation_matrix
+#   
+#   # Translate the coordinates back to the original position
+#   final_coords <- t(t(rotated_coords) + point_of_rotation)
+#   
+#   # Rebuild the polygon with the rotated coordinates
+#   rotated_vertebra <- st_polygon(list(final_coords))
+# 
+#   final_coords <- st_coordinates(rotated_vertebra)
+#   
+#   vert_rot_coord_list <- list()
+#   vert_rot_coord_list$sp <- final_coords[1,]
+#   vert_rot_coord_list$sa <- final_coords[2,]
+#   vert_rot_coord_list$ia <- final_coords[3,]
+#   vert_rot_coord_list$ip <- final_coords[4,]
+#   
+#   
+#   return(list(vert_geom = rotated_vertebra, 
+#               vert_rot_coord_list))
+# }
+
+
+# # Define the function to rotate the geometry
+# rotate_geometry <- function(vertebra, point_of_rotation, segment_angle_adjustment) {
+#   # Convert the angle from degrees to radians
+#   angle_rad <- segment_angle_adjustment * pi / 180
+# 
+#   # Extract the coordinates of the vertebra geometry
+#   coords <- st_coordinates(vertebra)[, 1:2]
+# 
+#   # Translate the coordinates so the point of rotation is at the origin
+#   translated_coords <- sweep(coords, 2, point_of_rotation, FUN = "-")
+# 
+#   # Define the rotation matrix
+#   rotation_matrix <- matrix(c(cos(angle_rad), -sin(angle_rad),
+#                               sin(angle_rad), cos(angle_rad)), ncol = 2)
+# 
+#   # Apply the rotation matrix to the translated coordinates
+#   rotated_coords <- t(rotation_matrix %*% t(translated_coords))
+# 
+#   # Translate the coordinates back to the original location
+#   final_coords <- sweep(rotated_coords, 2, point_of_rotation, FUN = "+")
+# 
+#   # Recreate the vertebra polygon with the new coordinates
+#   rotated_vertebra <- st_polygon(list(final_coords))
+# 
+#   # Ensure that the result is an 'sfc' object with the same CRS as the input
+#   rotated_vertebra <- st_sfc(rotated_vertebra, crs = st_crs(vertebra))
+#   
+#   
+#   final_coords <- st_coordinates(rotated_vertebra)
+# 
+#   vert_rot_coord_list <- list()
+#   vert_rot_coord_list$sp <- final_coords[1,]
+#   vert_rot_coord_list$sa <- final_coords[2,]
+#   vert_rot_coord_list$ia <- final_coords[3,]
+#   vert_rot_coord_list$ip <- final_coords[4,]
+# 
+# 
+#   return(list(vert_geom = rotated_vertebra,
+#               vert_rot_coord_list))
+#   
+#   # return(rotated_vertebra)
+# }
+
+```
+
+
+```{r}
+fem_head_center <- c(122, 156.125) 
+s1_anterior_superior <- c(87, 230.125) 
+s1_posterior_superior <- c(61, 241.125) 
+xr_centroid_df <- tibble(spine_point = c('s1_center', 'l5_centroid', 'l4_centroid', 'l3_centroid', 'l2_centroid', 'l1_centroid', 't12_centroid', 't11_centroid', 't10_centroid', 't9_centroid', 't8_centroid', 't7_centroid', 't6_centroid', 't5_centroid', 't4_centroid', 't3_centroid', 't2_centroid', 't1_centroid', 'c7_centroid', 'c6_centroid', 'c5_centroid', 'c4_centroid', 'c3_centroid', 'c2_centroid'), x = c(74, 86.96, 89, 83.597, 75.788, 71, 73.261, 80.996, 91.234, 101, 108.028, 112.876, 116.811, 121.097, 127, 135.339, 145.145, 155, 163.721, 171.052, 176.97, 181.449, 184.467, 186), y = c(235.625, 248.4, 272.125, 294.363, 317.778, 341.125, 363.397, 384.536, 404.719, 424.125, 442.911, 461.152, 478.899, 496.206, 513.125, 529.674, 545.728, 561.125, 575.716, 589.397, 602.072, 613.647, 624.03, 633.125))
+
+xr_spine_facing <- "right"
+
+if(xr_spine_facing == "right"){
+  xr_hyp <- jh_calculate_distance_between_2_points_function(point_1 = s1_anterior_superior, s1_posterior_superior)
+  xr_opp <- jh_calculate_distance_between_2_points_function(point_1 = s1_anterior_superior, c(s1_anterior_superior[1], s1_posterior_superior[2]))
+  xr_slope <- asin(xr_opp/xr_hyp)*180/pi
+  
+}else{
+  xr_hyp <- jh_calculate_distance_between_2_points_function(point_1 = s1_anterior_superior, s1_posterior_superior)
+  xr_opp <- jh_calculate_distance_between_2_points_function(point_1 = s1_anterior_superior, c(s1_anterior_superior[1], s1_posterior_superior[2]))
+  xr_slope <- asin(xr_opp/xr_hyp)*180/pi
+}
+
+xr_slope
+
+jh_calculate_distance_between_2_points_function(point_1 = s1_anterior_superior, s1_posterior_superior)
+
+fem_head_center <- c(122, 156.125) 
+s1_anterior_superior <- c(87, 230.125) 
+s1_posterior_superior <- c(61, 241.125) 
+xr_centroid_df <- tibble(spine_point = c('s1_center', 'l5_centroid', 'l4_centroid', 'l3_centroid', 'l2_centroid', 'l1_centroid', 't12_centroid', 't11_centroid', 't10_centroid', 't9_centroid', 't8_centroid', 't7_centroid', 't6_centroid', 't5_centroid', 't4_centroid', 't3_centroid', 't2_centroid', 't1_centroid', 'c7_centroid', 'c6_centroid', 'c5_centroid', 'c4_centroid', 'c3_centroid', 'c2_centroid'), x = c(74, 86.96, 89, 83.597, 75.788, 71, 73.261, 80.996, 91.234, 101, 108.028, 112.876, 116.811, 121.097, 127, 135.339, 145.145, 155, 163.721, 171.052, 176.97, 181.449, 184.467, 186), y = c(235.625, 248.4, 272.125, 294.363, 317.778, 341.125, 363.397, 384.536, 404.719, 424.125, 442.911, 461.152, 478.899, 496.206, 513.125, 529.674, 545.728, 561.125, 575.716, 589.397, 602.072, 613.647, 624.03, 633.125))
+
+
+xrspine_build_list <- build_spine_from_coordinates_function(femoral_head_center = fem_head_center, 
+                                                         s1_anterior_superior = s1_anterior_superior, 
+                                                         s1_posterior_superior = s1_posterior_superior, 
+                                                         centroid_df = xr_centroid_df, 
+                                                         spine_facing = "right")
+```
+
+
+```{r}
+ggplot()+ 
+  geom_sf(data = st_sfc(xrspine_build_list$vert_list)) +
+  geom_sf(data = xrspine_build_list$fem_head_sf)+
+  geom_sf(data = xrspine_build_list$sacrum_sf) +
+  geom_sf(data = st_sfc(test_rotated_vert), fill = "green", alpha = 0.5) +
+  geom_sf(data = xrspine_build_list$vert_list$l4, fill = "blue", alpha = 0.5)
+
+
+
+test_rotated_vert <- map2(.x = xrspine_build_list$vert_geoms_square_list[3:23], 
+                          .y = xrspine_build_list$vert_coord_list[3:23], 
+                          .f = ~ rotate_for_segment_angle_adjustment_function(vertebra = .x, 
+                                                                              point_of_rotation = .y$ip,
+                                                                              segment_angle_adjustment = 10, spine_orientation = "right"))
+
+# test_rotated_vert_trans <- map(.x = test_rotated_vert, .f = ~ .x - (st_centroid(test_rotated_l4) - st_centroid(xrspine_build_list$spine_geom_list$l4_geom)) )
+
+vert_height_df <- xrspine_build_list$vertebral_heights_df %>%
+  filter(!is.na(vertebral_height)) %>%
+  mutate(spine_level = str_remove_all(spine_point, "_centroid")) %>%
+  select(spine_level, vertebral_height)
+
+vert_height_list <- as.list(vert_height_df$vertebral_height)
+
+names(vert_height_list) <- vert_height_df$spine_level
+
+xrspine_build_list$vert_coord_list$l5$sp
+
+anterior_body_heights <- map(.x = xrspine_build_list$vert_coord_list, 
+                             .f = ~ jh_calculate_distance_between_2_points_function(point_1 = .x$sa, point_2 = .x$ia))
+
+posterior_body_heights <- map(.x = xrspine_build_list$vert_coord_list, 
+                             .f = ~ jh_calculate_distance_between_2_points_function(point_1 = .x$sp, point_2 = .x$ip))
+
+posterior_disc_heights <- map2(.x = xrspine_build_list$vert_coord_list[-length(xrspine_build_list$vert_coord_list)], 
+                     .y = xrspine_build_list$vert_coord_list[-1],
+                             .f = ~ jh_calculate_distance_between_2_points_function(point_1 = .x$sp, point_2 = .y$ip))
+
+
+
+
+
+sa_adjustment_df$sa_adjustment[1]
+sum(sa_adjustment_df$sa_adjustment[1])
+
+```
+
+
+```{r}
+new_segment_angles_list <- xrspine_build_list$segment_angles_list
+
+
+
+new_segment_angles_list$l5_segment_angle <- xrspine_build_list$segment_angles_list$l5_segment_angle + 4
+new_segment_angles_list$l4_segment_angle <- xrspine_build_list$segment_angles_list$l4_segment_angle + 6
+new_segment_angles_list$l3_segment_angle <- xrspine_build_list$segment_angles_list$l4_segment_angle + 10
+new_segment_angles_list$l2_segment_angle <- xrspine_build_list$segment_angles_list$l4_segment_angle + 14
+
+
+sa_adjustment_df <- enframe(new_segment_angles_list) %>%
+  unnest() %>%
+  select(name, new_segment_angle = value) %>%
+  left_join(enframe(xrspine_build_list$segment_angles_list) %>%
+  unnest()) %>%
+  rename(old_sa = value) %>%
+  mutate(sa_adjustment = new_segment_angle - old_sa) %>%
+  mutate(sa_adjustment = sa_adjustment*-1)
+
+full_spine_rotated_list <- jh_rotate_spine_from_coordinates_by_segment_angles_function(spine_build_list = xrspine_build_list, 
+                                                                                       s1_posterior_superior = s1_posterior_superior, 
+                                                                                       sa_adjustment_df = sa_adjustment_df)
+
+
+full_spine_rot_buffered_list <- map(.x = full_spine_rotated_list$vert_list, 
+                                    .f = ~ jh_safely_buffer_vert_function(vert_geom = .x$vert_geom,
+                                                                          buffer_amount = xrspine_build_list$buffer_amount))
+
+# full_spine_rot_buffered_list
+
+ggplot()+ 
+  geom_sf(data = st_sfc(xrspine_build_list$vert_list))  + 
+  map(.x = full_spine_rot_buffered_list, .f = ~ geom_sf(data = .x, fill = "green", alpha = 0.5)) +
+  geom_sf(data = xrspine_build_list$fem_head_sf) 
+  geom_sf(data = st_linestring(rbind(l1_center, 
+                                     st_coordinates(st_centroid(xrspine_build_list$fem_head_sf)))))
+  
+st_coordinates(st_centroid(xrspine_build_list$fem_head_sf))
+```
+```{r}
+fem_head_center
+
+s1_superior_center <- jh_get_point_along_line_function(coord_a = s1_posterior_superior, s1_anterior_superior, percent_a_to_b = 0.5)
+
+s1_superior_center
+
+l1_center <- st_coordinates(st_centroid(full_spine_rot_buffered_list$l1))[1,]
+
+calculate_vertex_angle(vertex_coord = fem_head_center, s1_superior_center = s1_superior_center, verebral_centroid_coord = l1_center)
+```
+
+
+```{r}
+calculate_vertex_angle <- function(vertex_coord, s1_superior_center, verebral_centroid_coord) {
+  # Create vectors from the fem_head_center to the other two points
+  vec1 <- s1_superior_center - vertex_coord
+  vec2 <- verebral_centroid_coord - vertex_coord
+  
+  # Calculate the dot product of the two vectors
+  dot_product <- sum(vec1 * vec2)
+  
+  # Calculate the magnitudes (lengths) of the vectors
+  mag_vec1 <- sqrt(sum(vec1^2))
+  mag_vec2 <- sqrt(sum(vec2^2))
+  
+  # Calculate the cosine of the angle using the dot product formula
+  cos_theta <- dot_product / (mag_vec1 * mag_vec2)
+  
+  # Ensure the value is within the valid range for acos
+  cos_theta <- min(1, max(-1, cos_theta))
+  
+  # Compute the angle in radians and convert to degrees
+  theta_radians <- acos(cos_theta)
+  theta_degrees <- theta_radians * (180 / pi)
+  
+  return(theta_degrees)
+}
+
+```
+
+
+```{r}
+rotated_vert_list <- list()
+
+# s1_posterior_superior
+
+rotated_vert_list$l5 <- rotate_for_segment_angle_adjustment_function(vertebra = xrspine_build_list$vert_geoms_square_list$l5, 
+                           point_of_rotation = s1_posterior_superior, 
+                           segment_angle_adjustment = sum(sa_adjustment_df$sa_adjustment[1]), 
+                           initial_translation_correction = c(0,0))
+
+
+rotated_vert_list$l4 <- rotate_for_segment_angle_adjustment_function(vertebra = xrspine_build_list$vert_geoms_square_list$l4, 
+                           point_of_rotation = rotated_vert_list$l5$vert_coord$sp, 
+                           segment_angle_adjustment = sum(sa_adjustment_df$sa_adjustment[1:2]), 
+                           initial_translation_correction = rotated_vert_list$l5$sp_translation)
+
+
+rotated_vert_list$l3 <- rotate_for_segment_angle_adjustment_function(vertebra = xrspine_build_list$vert_geoms_square_list$l3, 
+                           point_of_rotation = rotated_vert_list$l4$vert_coord$sp, 
+                           segment_angle_adjustment = sum(sa_adjustment_df$sa_adjustment[1:3]), 
+                           initial_translation_correction = rotated_vert_list$l4$sp_translation)
+
+
+rotated_vert_list$l2 <- rotate_for_segment_angle_adjustment_function(vertebra = xrspine_build_list$vert_geoms_square_list$l2, 
+                           point_of_rotation = rotated_vert_list$l3$vert_coord$sp, 
+                           segment_angle_adjustment = sum(sa_adjustment_df$sa_adjustment[1:4]), 
+                           initial_translation_correction = rotated_vert_list$l3$sp_translation)
+
+
+rotated_vert_list$l1 <- rotate_for_segment_angle_adjustment_function(vertebra = xrspine_build_list$vert_geoms_square_list$l1, 
+                           point_of_rotation = rotated_vert_list$l2$vert_coord$sp, 
+                           segment_angle_adjustment = sum(sa_adjustment_df$sa_adjustment[1:5]), 
+                           initial_translation_correction = rotated_vert_list$l2$sp_translation)
+
+rotated_vert_list$t12 <- rotate_for_segment_angle_adjustment_function(vertebra = xrspine_build_list$vert_geoms_square_list$t12, 
+                           point_of_rotation = rotated_vert_list$l1$vert_coord$sp, 
+                           segment_angle_adjustment = sum(sa_adjustment_df$sa_adjustment[1:6]), 
+                           initial_translation_correction = rotated_vert_list$l1$sp_translation)
+
+rotated_vert_list$t11 <- rotate_for_segment_angle_adjustment_function(vertebra = xrspine_build_list$vert_geoms_square_list$t11, 
+                           point_of_rotation = rotated_vert_list$t12$vert_coord$sp, 
+                           segment_angle_adjustment = sum(sa_adjustment_df$sa_adjustment[1:7]), 
+                           initial_translation_correction = rotated_vert_list$t12$sp_translation)
+
+rotated_vert_list$t10 <- rotate_for_segment_angle_adjustment_function(vertebra = xrspine_build_list$vert_geoms_square_list$t10, 
+                           point_of_rotation = rotated_vert_list$t11$vert_coord$sp, 
+                           segment_angle_adjustment = sum(sa_adjustment_df$sa_adjustment[1:8]), 
+                           initial_translation_correction = rotated_vert_list$t11$sp_translation)
+#######
+
+rotated_vert_list$t9 <- rotate_for_segment_angle_adjustment_function(vertebra = xrspine_build_list$vert_geoms_square_list$t9, 
+                           point_of_rotation = rotated_vert_list$t10$vert_coord$sp, 
+                           segment_angle_adjustment = sum(sa_adjustment_df$sa_adjustment[1:9]), 
+                           initial_translation_correction = rotated_vert_list$t10$sp_translation)
+
+rotated_vert_list$t8 <- rotate_for_segment_angle_adjustment_function(vertebra = xrspine_build_list$vert_geoms_square_list$t8, 
+                           point_of_rotation = rotated_vert_list$t9$vert_coord$sp, 
+                           segment_angle_adjustment = sum(sa_adjustment_df$sa_adjustment[1:10]), 
+                           initial_translation_correction = rotated_vert_list$t9$sp_translation)
+
+rotated_vert_list$t7 <- rotate_for_segment_angle_adjustment_function(vertebra = xrspine_build_list$vert_geoms_square_list$t7, 
+                           point_of_rotation = rotated_vert_list$t8$vert_coord$sp, 
+                           segment_angle_adjustment = sum(sa_adjustment_df$sa_adjustment[1:11]), 
+                           initial_translation_correction = rotated_vert_list$t8$sp_translation)
+
+rotated_vert_list$t6 <- rotate_for_segment_angle_adjustment_function(vertebra = xrspine_build_list$vert_geoms_square_list$t6, 
+                           point_of_rotation = rotated_vert_list$t7$vert_coord$sp, 
+                           segment_angle_adjustment = sum(sa_adjustment_df$sa_adjustment[1:12]), 
+                           initial_translation_correction = rotated_vert_list$t7$sp_translation)
+
+rotated_vert_list$t5 <- rotate_for_segment_angle_adjustment_function(vertebra = xrspine_build_list$vert_geoms_square_list$t5, 
+                           point_of_rotation = rotated_vert_list$t6$vert_coord$sp, 
+                           segment_angle_adjustment = sum(sa_adjustment_df$sa_adjustment[1:13]), 
+                           initial_translation_correction = rotated_vert_list$t6$sp_translation)
+
+rotated_vert_list$t4 <- rotate_for_segment_angle_adjustment_function(vertebra = xrspine_build_list$vert_geoms_square_list$t4, 
+                           point_of_rotation = rotated_vert_list$t5$vert_coord$sp, 
+                           segment_angle_adjustment = sum(sa_adjustment_df$sa_adjustment[1:14]), 
+                           initial_translation_correction = rotated_vert_list$t5$sp_translation)
+
+rotated_vert_list$t3 <- rotate_for_segment_angle_adjustment_function(vertebra = xrspine_build_list$vert_geoms_square_list$t3, 
+                           point_of_rotation = rotated_vert_list$t4$vert_coord$sp, 
+                           segment_angle_adjustment = sum(sa_adjustment_df$sa_adjustment[1:15]), 
+                           initial_translation_correction = rotated_vert_list$t4$sp_translation)
+
+rotated_vert_list$t2 <- rotate_for_segment_angle_adjustment_function(vertebra = xrspine_build_list$vert_geoms_square_list$t2, 
+                           point_of_rotation = rotated_vert_list$t3$vert_coord$sp, 
+                           segment_angle_adjustment = sum(sa_adjustment_df$sa_adjustment[1:16]), 
+                           initial_translation_correction = rotated_vert_list$t3$sp_translation)
+
+rotated_vert_list$t1 <- rotate_for_segment_angle_adjustment_function(vertebra = xrspine_build_list$vert_geoms_square_list$t1, 
+                           point_of_rotation = rotated_vert_list$t2$vert_coord$sp, 
+                           segment_angle_adjustment = sum(sa_adjustment_df$sa_adjustment[1:17]), 
+                           initial_translation_correction = rotated_vert_list$t2$sp_translation)
+
+rotated_vert_list$c7 <- rotate_for_segment_angle_adjustment_function(vertebra = xrspine_build_list$vert_geoms_square_list$c7, 
+                           point_of_rotation = rotated_vert_list$t1$vert_coord$sp, 
+                           segment_angle_adjustment = sum(sa_adjustment_df$sa_adjustment[1:18]), 
+                           initial_translation_correction = rotated_vert_list$t1$sp_translation)
+
+####
+
+rotated_vert_list$c6 <- rotate_for_segment_angle_adjustment_function(vertebra = xrspine_build_list$vert_geoms_square_list$c6, 
+                           point_of_rotation = rotated_vert_list$c7$vert_coord$sp, 
+                           segment_angle_adjustment = sum(sa_adjustment_df$sa_adjustment[1:19]), 
+                           initial_translation_correction = rotated_vert_list$c7$sp_translation)
+
+rotated_vert_list$c5 <- rotate_for_segment_angle_adjustment_function(vertebra = xrspine_build_list$vert_geoms_square_list$c5, 
+                           point_of_rotation = rotated_vert_list$c6$vert_coord$sp, 
+                           segment_angle_adjustment = sum(sa_adjustment_df$sa_adjustment[1:20]), 
+                           initial_translation_correction = rotated_vert_list$c6$sp_translation)
+
+rotated_vert_list$c4 <- rotate_for_segment_angle_adjustment_function(vertebra = xrspine_build_list$vert_geoms_square_list$c4, 
+                           point_of_rotation = rotated_vert_list$c5$vert_coord$sp, 
+                           segment_angle_adjustment = sum(sa_adjustment_df$sa_adjustment[1:21]), 
+                           initial_translation_correction = rotated_vert_list$c5$sp_translation)
+
+rotated_vert_list$c3 <- rotate_for_segment_angle_adjustment_function(vertebra = xrspine_build_list$vert_geoms_square_list$c3, 
+                           point_of_rotation = rotated_vert_list$c4$vert_coord$sp, 
+                           segment_angle_adjustment = sum(sa_adjustment_df$sa_adjustment[1:22]), 
+                           initial_translation_correction = rotated_vert_list$c4$sp_translation)
+
+rotated_vert_list$c2 <- rotate_for_segment_angle_adjustment_function(vertebra = xrspine_build_list$vert_geoms_square_list$c2, 
+                           point_of_rotation = rotated_vert_list$c3$vert_coord$sp, 
+                           segment_angle_adjustment = sum(sa_adjustment_df$sa_adjustment[1:23]), 
+                           initial_translation_correction = rotated_vert_list$c3$sp_translation)
+
+rotated_vert_list$c1 <- rotate_for_segment_angle_adjustment_function(vertebra = xrspine_build_list$vert_geoms_square_list$c1, 
+                           point_of_rotation = rotated_vert_list$c2$vert_coord$sp, 
+                           segment_angle_adjustment = sum(sa_adjustment_df$sa_adjustment[1:24]), 
+                           initial_translation_correction = rotated_vert_list$c2$sp_translation)
+
+```
+
+
+```{r}
+buffered_rot_geoms <- map(.x = rotated_vert_list, .f = ~ safely_buffer_vert_function(vert_geom = .x$vert_geom, buffer_amount = xrspine_build_list$buffer_amount))
+
+# buffered_rot_geoms$l5
+ggplot()+ 
+  geom_sf(data = st_sfc(xrspine_build_list$vert_list))  + 
+  map(.x = buffered_rot_geoms, .f = ~ geom_sf(data = .x, fill = "green", alpha = 0.5))
+  # geom_sf(data = buffered_rot_geoms$l5, fill = "green", alpha = 0.5)+ 
+  # geom_sf(data = buffered_rot_geoms$l4, fill = "green", alpha = 0.5)+ 
+  # geom_sf(data = buffered_rot_geoms$l3, fill = "green", alpha = 0.5)+ 
+  # geom_sf(data = buffered_rot_geoms$l2, fill = "green", alpha = 0.5)+ 
+  # geom_sf(data = st_sfc(buffered_rot_geoms[1:20]), fill = "green", alpha = 0.5)
+
+  # geom_sf(data = rotated_vert_list$l5$vert_geom, fill = "green", alpha = 0.5)+ 
+  # geom_sf(data = rotated_vert_list$l4$vert_geom, fill = "green", alpha = 0.5)+ 
+  # geom_sf(data = rotated_vert_list$l3$vert_geom, fill = "green", alpha = 0.5)+ 
+  # geom_sf(data = rotated_vert_list$l2$vert_geom, fill = "green", alpha = 0.5)+ 
+  # geom_sf(data = rotated_vert_list$l1$vert_geom, fill = "green", alpha = 0.5)+ 
+  # geom_sf(data = rotated_vert_list$t12$vert_geom, fill = "green", alpha = 0.5)
+```
+
+
+```{r}
+st_zm(st_point(rotated_vert_list$l3$vert_coord$sp))
+
+coords <- st_coordinates(xrspine_build_list$vert_geoms_square_list$l4)[, 1:2]
+coords
+translated_coords <- sweep(coords, 2, xrspine_build_list$vert_coord_list$l5$sp, FUN = "-")
+
+xrspine_build_list$vert_coord_list$l5$sp
+
+test_l4 <- rotate_geometry(vertebra = xrspine_build_list$vert_geoms_square_list$l4, point_of_rotation = xrspine_build_list$vert_coord_list$l5$sp, segment_angle_adjustment = -20)
+xrspine_build_list$vert_coord_list$l5$sp
+
+l4_translate_correction <- xrspine_build_list$vert_coord_list$l4$sp - test_l4$vert_coord$sp
+
+test_l3 <- rotate_for_segment_angle_adjustment_function(vertebra = xrspine_build_list$vert_geoms_square_list$l3, 
+                           point_of_rotation = test_l4$vert_coord$sp, 
+                           segment_angle_adjustment = -20, 
+                           initial_translation_correction = l4_translate_correction)
+
+as.vector(st_coordinates(xrspine_build_list$vert_geoms_square_list$l3)[1, 1:2])
+
+test_l3$sp_translation
+
+xrspine_build_list$vert_coord_list$l3
+# st_zm(st_coordinates(test_l3$vert_geom))
+
+ggplot()+ 
+  geom_sf(data = st_sfc(xrspine_build_list$vert_list[1:6])) +
+  geom_sf(data = test_l4$vert_geom, fill = "green", alpha = 0.5)+
+  geom_sf(data = test_l3$vert_geom, fill = "green", alpha = 0.5)+
+  geom_sf(data = st_point(test_l4$vert_coord$sp), fill = "red", alpha = 0.5)
+
+
+```
+
+
+
+```{r}
+rotate_geometry <- function(vertebra, point_of_rotation, segment_angle_adjustment, initial_translation_correction = c(0,0)) {
+  # Convert the angle from degrees to radians
+  angle_rad <- segment_angle_adjustment * pi / 180
+
+
+  vertebra <- vertebra - initial_translation_correction
+  # Extract the coordinates of the vertebra geometry
+  coords <- st_coordinates(vertebra)[, 1:2]
+
+  # Translate the coordinates so the point of rotation is at the origin
+  translated_coords <- sweep(coords, 2, point_of_rotation, FUN = "-")
+
+  # Define the rotation matrix
+  rotation_matrix <- matrix(c(cos(angle_rad), -sin(angle_rad),
+                              sin(angle_rad), cos(angle_rad)), ncol = 2)
+
+  # Apply the rotation matrix to the translated coordinates
+  rotated_coords <- t(rotation_matrix %*% t(translated_coords))
+
+  # Translate the coordinates back to the new rotated position (not the original position)
+  final_coords <- sweep(rotated_coords, 2, point_of_rotation, FUN = "+")
+
+  # Recreate the vertebra polygon with the new coordinates
+  rotated_vertebra <- st_polygon(list(final_coords))
+
+  # Ensure that the result is an 'sfc' object with the same CRS as the input
+  rotated_vertebra <- st_sfc(rotated_vertebra, crs = st_crs(vertebra))
+
+  final_coords <- st_zm(st_coordinates(rotated_vertebra))
+  
+  vert_rot_coord_list <- list()
+  vert_rot_coord_list$sp <- final_coords[1,]
+  vert_rot_coord_list$sa <- final_coords[2,]
+  vert_rot_coord_list$ia <- final_coords[3,]
+  vert_rot_coord_list$ip <- final_coords[4,]
+  
+  return(list(vert_geom = rotated_vertebra, 
+              vert_coord = vert_rot_coord_list))
+}
+```
+
+
+```{r}
+rotated_vert_list$l3 <- rotate_for_segment_angle_adjustment_function(vertebra = xrspine_build_list$vert_geoms_square_list$l3, 
+                                             segment_angle_adjustment = sum(sa_adjustment_df$sa_adjustment[1:3]), 
+                                             inferior_vert_sp = rotated_vert_list$l4$vert_coord$sp)
+
+rotated_vert_list$l2 <- rotate_for_segment_angle_adjustment_function(vertebra = xrspine_build_list$vert_geoms_square_list$l2, 
+                                             segment_angle_adjustment = sum(sa_adjustment_df$sa_adjustment[1:4]), 
+                                             inferior_vert_sp = rotated_vert_list$l3$vert_coord$sp)
+
+rotated_vert_list$l1 <- rotate_for_segment_angle_adjustment_function(vertebra = xrspine_build_list$vert_geoms_square_list$l1, 
+                                             segment_angle_adjustment = sum(sa_adjustment_df$sa_adjustment[1:5]), 
+                                             inferior_vert_sp = rotated_vert_list$l2$vert_coord$sp)
+
+rotated_vert_list$t12 <- rotate_for_segment_angle_adjustment_function(vertebra = xrspine_build_list$vert_geoms_square_list$t12, 
+                                             segment_angle_adjustment = sum(sa_adjustment_df$sa_adjustment[1:6]), 
+                                             inferior_vert_sp = rotated_vert_list$l1$vert_coord$sp)
+
+
+test_ip <- st_coordinates(xrspine_build_list$vert_geoms_square_list$l3)[4,1:2]
+
+  testip_translation <- rotated_vert_list$l3$vert_coord$ip - test_ip 
+  
+  testrotated_vertebra <- rotated_vert_list$l3$vert_geom + testip_translation
+  
+  
+ggplot()+ 
+  geom_sf(data = st_sfc(xrspine_build_list$vert_list[1:6]))  + 
+  geom_sf(data = rotated_vert_list$l5$vert_geom, fill = "green", alpha = 0.5) +
+  geom_sf(data = rotated_vert_list$l4$vert_geom, fill = "green", alpha = 0.5) +
+  geom_sf(data = rotated_vert_list$l3$vert_geom, fill = "green", alpha = 0.5) +
+  geom_sf(data = testrotated_vertebra, fill = "blue", alpha = 0.5) +
+  geom_sf(data = rotated_vert_list$l2$vert_geom, fill = "green", alpha = 0.5) +
+  geom_sf(data = rotated_vert_list$l1$vert_geom, fill = "green", alpha = 0.5) +
+  geom_sf(data = rotated_vert_list$t12$vert_geom, fill = "green", alpha = 0.5) +
+  
+  # geom_sf(data = st_point(vert_rot_coord_list$sp), color = "green")+
+  geom_sf(data = st_point(rotated_vert_list$l5$vert_coord$sp), color = "blue")+
+  geom_sf(data = st_point(rotated_vert_list$l4$vert_coord$sp), color = "red")+
+  geom_sf(data = st_point(rotated_vert_list$l3$vert_coord$sp), color = "orange")
+
+# vert_rot_coord_list$sp
+
+```
+
+
+```{r}
+vertebral_body_build_function_new <- function(vertebral_slope, 
+                                          inferior_vert_list, 
+                                          endplate_width = 5, 
+                                          endplate_height = 4,
+                                          posterior_body_height = 99,
+                                          wedge_body = TRUE, 
+                                          posterior_lordosis_line_length = 30, 
+                                          spine_facing = "right",
+                                          c2_body = FALSE,
+                                          pso = FALSE){
+  
+  spine_orientation <- if_else(spine_facing == "left", 1, -1)
+
+  disc_height <- 0.5
+  # endplate_width <- 5
+  # endplate_height <- 4
+  posterior_vertebral_body_height <- endplate_height 
+  anterior_body_height <- 4
+  # pso <- "yes"
+  # pso <- "no"
+  
+    ######### SUPERIOR POSTERIOR CORNER ###########
+    vert_sp_x <- vert_ip_x - spine_orientation * (posterior_vertebral_body_height * sin(vertebral_slope)) ### establishes the superior posterior corner X 
+    vert_sp_y <- vert_ip_y + (posterior_vertebral_body_height * cos(vertebral_slope)) ### establishes the inferior posterior corner y
+    vert_sp <- c(vert_sp_x, vert_sp_y)
+    
+    ######### SUPERIOR ANTERIOR CORNER ###########
+    vert_sa_x <- vert_sp_x - spine_orientation * (endplate_width * cos(vertebral_slope)) ### establishes the superior posterior corner X 
+    vert_sa_y <- vert_sp_y - (endplate_width * sin(vertebral_slope)) ### establishes the inferior posterior corner y
+    vert_sa <- c(vert_sa_x, vert_sa_y)
+    
+    ######### INFERIOR ANTERIOR CORNER ###########
+    vert_ia_x <- vert_ip_x - spine_orientation * (endplate_width * cos(vertebral_slope)) ### establishes the inferior posterior corner X 
+    vert_ia_y <- vert_ip_y - (endplate_width * sin(vertebral_slope)) ### establishes the inferior posterior corner y
+    vert_ia <- c(vert_ia_x, vert_ia_y)
+    
+    
+}
+```
+
+
+
+
+```{r}
+l5_list <- vertebral_body_build_function_new(vertebral_slope = (pi / 180) * (ss_value  - segment_angle_list$l5_segment_angle), 
+                                               inferior_vert_list = sacrum_list,
+                                               endplate_width = 5, 
+                                               endplate_height = vert_height_list$l5, 
+                                               wedge_body = FALSE,
+                                               spine_facing = "right", 
+                                               pso = FALSE)
+  
+  l4_list <- vertebral_body_build_function_new(vertebral_slope = (pi / 180) * (ss_value  - (Reduce("+", segment_angle_list[1:2]))), 
+                                               inferior_vert_list = l5_list, 
+                                               endplate_width = 5,
+                                               endplate_height = 4, 
+                                               wedge_body = FALSE, 
+                                               spine_facing = spine_faces, 
+                                               build_lines = FALSE,
+                                               pso = FALSE)
+
+```
+

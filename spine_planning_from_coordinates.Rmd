@@ -1,0 +1,961 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+library(shiny)
+# library(reactlog)
+library(sf)
+library(tidyverse)
+library(ggplot2)
+library(shinyWidgets)
+library(shinyBS)
+# library(kableExtra)
+# library(rms)
+library(svglite)
+library(glue)
+library(cowplot)
+library(janitor)
+# library(rms)
+# library(Hmisc)
+library(cowplot)
+# library(assertr)
+library(lubridate)
+library(shinydashboard)
+library(magick)
+# library(ggforce)
+library(plotly)
+
+source("jh_functions.R", local = TRUE)
+source("compute_segment_angles_function_from_sim_data_2024.R", local = TRUE)
+source("function_segment_angles_separated.R", local = TRUE)
+
+source("jh_spine_build_NEW_function.R", local = TRUE)
+
+source("jh_prescribing_alignment_functions.R", local = TRUE)
+
+source("spinal_regional_alignment_analysis_by_vpa.R", local = TRUE)
+
+# source("jh_build_spine_by_vertebral_pelvic_angles_only.R", local = TRUE)
+source("jh_build_spine_by_vertebral_pelvic_angles_cleaned.R", local = TRUE)
+source("prescribing_alignment_by_matching_unfused.R", local = TRUE)
+source("xray_segment_angles_model_functions.R", local = TRUE)
+source("build_spine_from_coordinates_functions.R", local = TRUE)
+```
+```{r}
+fem_head_center <- c(152.256387244255, 154.437783565929) 
+s1_anterior_superior <- c(112.391211117242, 247.739259607875) 
+s1_posterior_superior <- c(81.0079873576778, 270.640530999989) 
+xr_centroid_df <- tibble(spine_point = c('s1_center', 'l5_centroid', 'l4_centroid', 'l3_centroid', 'l2_centroid', 'l1_centroid', 't12_centroid', 't11_centroid', 't10_centroid', 't9_centroid', 't8_centroid', 't7_centroid', 't6_centroid', 't5_centroid', 't4_centroid', 't3_centroid', 't2_centroid', 't1_centroid', 'c7_centroid', 'c6_centroid', 'c5_centroid', 'c4_centroid', 'c3_centroid', 'c2_centroid'), x = c(96.7, 116.417, 125.962, 128.429, 128.252, 130.203, 137.85, 149.947, 164.047, 177.702, 189.084, 198.846, 208.261, 218.601, 231.139, 246.585, 263.401, 279.486, 293.114, 304.072, 312.521, 318.624, 322.543, 324.44), y = c(259.19, 278.931639439171, 315.595, 350.354, 386.748, 422.467, 455.665, 486.349, 514.991, 542.063, 567.94, 592.61, 615.961, 637.883, 658.266, 677.096, 694.751, 711.702, 728.393, 745.144, 762.248, 779.993, 798.672, 818.575))
+
+xrspine_build_list <- build_spine_from_coordinates_function(femoral_head_center = fem_head_center, 
+                                                         s1_anterior_superior = s1_anterior_superior, 
+                                                         s1_posterior_superior = s1_posterior_superior, 
+                                                         centroid_df = xr_centroid_df, 
+                                                         spine_facing = "right")
+
+xrspine_build_list$vertebral_heights_df %>%
+  ggplot(aes(x = x, y = y)) + 
+  geom_path()
+
+      alpha_vec <- rep(1, times = length(xrspine_build_list$vert_list))
+      
+      alpha_vec[length(xrspine_build_list$vert_list)] <- 0.5
+      
+      ggplot() +
+        # geom_sf(data = st_sfc(xrspine_build_list$vert_list[-length(xrspine_build_list$vert_list)]),
+        #         # alpha = alpha_vec,
+        #         color = "black",
+        #         fill = "grey90", 
+        #         alpha = 0.9) +
+        geom_sf(data = xrspine_build_list$vert_list$c2, fill = "green") 
+        # geom_sf(data = st_point(xrspine_build_list$c2_list$dens_sp))+
+        # geom_sf(data = st_point(xrspine_build_list$c2_list$dens_sa))+
+        # geom_sf(data = st_point(xrspine_build_list$c2_list$dens_ia))+
+        # geom_sf(data = st_point(xrspine_build_list$c2_list$dens_ip))
+        # geom_sf(data = st_buffer(x = st_buffer(x = xrspine_build_list$vert_geoms_square_list$c2, dist = -1), dist = 1), fill = "blue", alpha = 0.2)
+      
+      
+        return_list$vert_list <- map(.x = return_list$vert_geoms_square_list, 
+                               .f = ~ st_buffer(x = st_buffer(x = .x, dist = -buffer_amount*0.5, endCapStyle = "ROUND"),
+                                                dist = buffer_amount, endCapStyle = "ROUND"))
+        
+        
+        
+        safely_buffer_vert_function <- function(vert_geom, buffer_amount = 0.1){
+          neg_buffer <- st_buffer(x = vert_geom, dist = -buffer_amount*0.5, endCapStyle = "ROUND")
+          
+          while (st_is_empty(neg_buffer)) {
+            buffer_amount <- buffer_amount*0.8
+            neg_buffer <- st_buffer(x = vert_geom, dist = -buffer_amount*0.5, endCapStyle = "ROUND")
+          }
+          
+          buffered_geom <- st_buffer(x = neg_buffer, dist = buffer_amount, endCapStyle = "ROUND")
+          
+          buffered_geom
+          
+        }
+        
+test_geoms <- map(.x = xrspine_build_list$vert_geoms_square_list, .f = ~ safely_buffer_vert_function(vert_geom = .x, buffer_amount = 6))
+
+test_geoms$c1
+
+```
+
+
+```{r}
+geom_sf(data = xrspine_build_list$vert_list$c1, 
+                fill = "blue",
+                alpha = 0.5) +
+        geom_path(data =  xr_centroid_df, aes(x = x, y = y)) +
+        geom_sf(data = xrspine_build_list$fem_head_sf, 
+                fill = "grey90") +
+        geom_sf(data = xrspine_build_list$sacrum_sf, 
+                fill = "grey90", 
+                alpha = 0.8) +
+        geom_sf(data = xrspine_build_list$lines_list$l1pa, 
+                color = "blue")+
+        geom_sf(data = xrspine_build_list$lines_list$t9pa, 
+                color = "orange") +
+        geom_sf(data = xrspine_build_list$lines_list$t4pa, 
+                color = "purple") +
+        geom_sf(data = xrspine_build_list$lines_list$c2pa, 
+                color = "darkgreen") 
+        
+      
+      
+      alpha_vec <- rep(1, times = length(xrspine_build_list$vert_list))
+      
+      alpha_vec[length(xrspine_build_list$vert_list)] <- 0.5
+      
+      alpha_vec
+      xrspine_build_list$superior_endplate_coord_df
+```
+
+
+```{r}
+xrspine_build_list$sup_endplates_df %>%
+  mutate(distal_sp_x = lag(sp_x),
+         distal_sp_y = lag(sp_y),
+         distal_sa_x = lag(sa_x),
+         distal_sa_y = lag(sa_y)
+         ) %>%
+  filter(spine_level != "s1_superior_endplate") %>%
+  mutate(segment_angle = pmap(.l = list(..1 = sp_x, 
+                                        ..2 = sp_y,
+                                        ..3 = sa_x, 
+                                        ..4 = sa_y,
+                                        ..5 = distal_sp_x, 
+                                        ..6 = distal_sp_y,
+                                        ..7 = distal_sa_x, 
+                                        ..8 = distal_sa_y
+                                        ),
+                              .f =~ calculate_segment_angle_between_vertebrae_from_coordinates_function(sp_upper = c(..1, ..2),
+                                                                                                       sa_upper = c(..3, ..4),
+                                                                                                       sp_lower = c(..5, ..6),
+                                                                                                       sa_lower = c(..7, ..8)))) %>%
+  unnest(segment_angle) %>%
+  mutate(segment_angle = round(segment_angle, 4)) %>%
+  mutate(spine_level = str_replace_all(spine_level, "_superior_endplate", "_segment_angle")) %>%
+  select(spine_level, segment_angle)
+
+
+  ggplot(aes(x = sp_x, y = sp_y)) + 
+  geom_point() + 
+  coord_fixed()
+
+xrcentroid_df %>%
+  ggplot(aes(x = x, y = y)) +
+  geom_point() +
+  coord_fixed()
+
+xrspine_build_list$vert_list
+
+st_sfc(xrspine_build_list$vert_list)
+
+
+      ggplot() +
+        geom_sf(data = st_sfc(xrspine_build_list$vert_list),
+                color = "black",
+                fill = "grey90", 
+                alpha = 0.9)
+```
+
+
+```{r}
+xrspine_build_list <- build_spine_from_coordinates_function(femoral_head_center = fem_head_center, 
+                                                         s1_anterior_superior = s1_anterior_superior, 
+                                                         s1_posterior_superior = s1_posterior_superior, 
+                                                         centroid_df = xr_centroid_df, 
+                                                         spine_facing = "right")
+
+
+xralignment_parameters_list <- list()
+
+xralignment_parameters_list$pelvic_incidence <- 49
+xralignment_parameters_list$pelvic_tilt <- 30
+xralignment_parameters_list$l1pa <- 15.5
+xralignment_parameters_list$t9pa <- 26
+xralignment_parameters_list$t4pa <- 31.5
+xralignment_parameters_list$c2pa <- 38
+
+xrspine_build_list$segment_angles_list_for_planning$l5_segment_angle
+
+
+
+```
+
+
+```{r}
+xrspine_build_list$segment_angles_list_for_planning
+
+
+xr_lower_plan <- build_upper_t_uiv_spine_plot_function(pso_option_number = 1, 
+                                          preop_age = 55,
+                                          preop_sex = "female",
+                                          preop_pelvic_incidence = xralignment_parameters_list$pelvic_incidence,
+                                          preop_pt = xralignment_parameters_list$pelvic_tilt,
+                                          preop_l1pa = xralignment_parameters_list$l1pa,
+                                          preop_t9pa = xralignment_parameters_list$t9pa,
+                                          preop_t4pa = xralignment_parameters_list$t4pa,
+                                          preop_c2pa = xralignment_parameters_list$c2pa,
+                                          preop_segment_angles_input_list_reactive = xrspine_build_list$segment_angles_list_for_planning, 
+                                          # preop_segment_angles_input_list_reactive = spine_build_list$segment_angles_list,
+                                          preop_rigid_levels_vector_reactive = c("l1_segment",
+                                                                                 "l2_segment", 
+                                                                                 "l3_segment", 
+                                                                                 "l4_segment"), #preop_rigid_levels_vector_reactive()
+                                          return_list_or_plot = "list"
+    )
+
+
+
+xr_lower_plan$prescribed_plot_no_targets
+
+
+
+```
+```{r}
+xrspine_build_list$segment_angles_list_for_planning
+
+
+
+xrspine_build_list$square_vert_df$vert_coord_df[1] 
+
+xrspine_build_list$vert_coord_list
+
+test_rotated_l4 <- rotate_for_segment_angle_adjustment_function(vertebra = xrspine_build_list$vert_geoms_square_list$l4, 
+                                             point_of_rotation = xrspine_build_list$vert_coord_list$l4$ip, 
+                                             segment_angle_adjustment = 10, 
+                                             spine_orientation = "right")
+
+
+test_rotated_l4
+
+length(xrspine_build_list$spine_geom_list)
+
+xrspine_build_list$square_vert_df
+
+test_rotated_vert <- map2(.x = xrspine_build_list$vert_geoms_square_list[3:23], 
+                          .y = xrspine_build_list$vert_coord_list[3:23], 
+                          .f = ~ rotate_for_segment_angle_adjustment_function(vertebra = .x, 
+                                                                              point_of_rotation = .y$ip,
+                                                                              segment_angle_adjustment = 10, spine_orientation = "right"))
+
+names(test_rotated_vert) <- names(xrspine_build_list$spine_geom_list[3:23])
+
+test_rotated_vert$l3_geom
+
+xrspine_build_list$vert_coord_list$l3$ip - 
+
+test_rotated_vert_trans <- map(.x = test_rotated_vert, .f = ~ .x - (st_centroid(test_rotated_l4) - st_centroid(xrspine_build_list$spine_geom_list$l4_geom)) )
+
+
+
+ggplot()+ 
+  geom_sf(data = st_sfc(xrspine_build_list$vert_list)) +
+  geom_sf(data = xrspine_build_list$fem_head_sf)+
+  geom_sf(data = xrspine_build_list$sacrum_sf) +
+  geom_sf(data = st_sfc(test_rotated_vert), fill = "green", alpha = 0.5)
+
+xrspine_build_list$segment_angles_list
+
+
+xrspine_build_list$sup_endplates_df
+
+```
+
+
+```{r}
+# rotate_for_segment_angle_adjustment_function <- function(vertebra, point_of_rotation, segment_angle_adjustment, spine_orientation = "right") {
+#   
+#   segment_angle_adjustment <- if_else(spine_orientation == "right", -1*segment_angle_adjustment, segment_angle_adjustment)
+#   
+#   # Ensure the point of rotation is in the correct format as an sf point
+#     vertebra_coords <- st_coordinates(vertebra)
+#   
+#   # Ensure point_of_rotation is a numeric vector
+#   point_of_rotation <- as.numeric(point_of_rotation)
+#   
+#   # Convert the angle from degrees to radians
+#   angle_radians <- segment_angle_adjustment * pi / 180
+#   
+#   # Define the rotation matrix
+#   # rotation_matrix <- matrix(c(cos(angle_radians), -sin(angle_radians), 
+#   #                             sin(angle_radians), cos(angle_radians)), 
+#   #                           nrow = 2, ncol = 2)
+#   rotation_matrix <- matrix(c(cos(angle_radians), -sin(angle_radians), 
+#                               sin(angle_radians), cos(angle_radians)), 
+#                             nrow = 2, byrow = TRUE)
+#   
+#   # Translate vertebra geometry so that the point_of_rotation is at the origin
+#   # translated_vertebra <- st_geometry(vertebra) - point_of_rotation
+#   # translated_vertebra <- vertebra - point_of_rotation
+#   
+#   translated_coords <- t(t(vertebra_coords[, 1:2]) - point_of_rotation)
+#   
+#     # Apply the rotation matrix to the translated coordinates
+#   rotated_coords <- translated_coords %*% rotation_matrix
+#   
+#   # Translate the coordinates back to the original position
+#   final_coords <- t(t(rotated_coords) + point_of_rotation)
+#   
+#   rotated_vertebra <- st_polygon(list(final_coords))
+#   
+#   vert_rot_coord_list <- list()
+# vert_rot_coord_list$sp <- final_coords[1,]
+# vert_rot_coord_list$sa <- final_coords[2,]
+# vert_rot_coord_list$ia <- final_coords[3,]
+# vert_rot_coord_list$ip <- final_coords[4,]
+#   
+#   return(list(
+#               vert_geom = rotated_vertebra, 
+#               vert_coord = vert_rot_coord_list))
+# }
+
+
+```
+
+
+
+
+
+```{r}
+femoral_head_center <- c(152.256387244255, 154.437783565929) 
+s1_anterior_superior <- c(112.391211117242, 247.739259607875) 
+s1_posterior_superior <- c(81.0079873576778, 270.640530999989) 
+centroid_df <- tibble(spine_point = c('s1_center', 'l5_centroid', 'l4_centroid', 'l3_centroid', 'l2_centroid', 'l1_centroid', 't12_centroid', 't11_centroid', 't10_centroid', 't9_centroid', 't8_centroid', 't7_centroid', 't6_centroid', 't5_centroid', 't4_centroid', 't3_centroid', 't2_centroid', 't1_centroid', 'c7_centroid', 'c6_centroid', 'c5_centroid', 'c4_centroid', 'c3_centroid', 'c2_centroid'), x = c(96.7, 116.417, 125.962, 128.429, 128.252, 130.203, 137.85, 149.947, 164.047, 177.702, 189.084, 198.846, 208.261, 218.601, 231.139, 246.585, 263.401, 279.486, 293.114, 304.072, 312.521, 318.624, 322.543, 324.44), y = c(259.19, 278.931639439171, 315.595, 350.354, 386.748, 422.467, 455.665, 486.349, 514.991, 542.063, 567.94, 592.61, 615.961, 637.883, 658.266, 677.096, 694.751, 711.702, 728.393, 745.144, 762.248, 779.993, 798.672, 818.575))
+
+spine_facing <- "right"
+
+
+  return_list <- list()
+  
+  s1_endplate_width <- jh_calculate_distance_between_2_points_function(point_1 = s1_anterior_superior, point_2 = s1_posterior_superior)
+  
+  
+
+  ##### FIRST STEP IS TO CONSTRUCT THE VERTEBRAE AND COMPUTE THE ESTIMATED SLOPES AT EACH LEVEL
+  
+  vertebral_heights_df <- centroid_df %>%
+    filter(str_detect(spine_point, "centroid|center")) %>%
+    mutate(distance_to_cranial_vertebra = pmap(.l = list(..1 = x, ..2 = y, ..3 = lead(x), ..4 = lead(y)), 
+                                               .f = ~ jh_calculate_distance_between_2_points_function(point_1 = c(..1, ..2),
+                                                                                                      point_2 = c(..3, ..4)))) %>%
+    unnest() %>%
+    mutate(distance_to_caudal_vertebra = pmap(.l = list(..1 = x, ..2 = y, ..3 = lag(x), ..4 = lag(y)), 
+                                              .f = ~ jh_calculate_distance_between_2_points_function(point_1 = c(..1, ..2),
+                                                                                                     point_2 = c(..3, ..4)))) %>%
+    unnest() %>%
+    mutate(vertebral_height = 0.4*distance_to_cranial_vertebra + if_else(spine_point == "l5_centroid", 
+                                                                         0.7*distance_to_caudal_vertebra, 0.4*distance_to_caudal_vertebra)) %>%
+    mutate(vertebral_height = if_else(is.na(vertebral_height), lag(vertebral_height), vertebral_height)) %>%
+    select(spine_point, x, y, vertebral_height)%>%
+    mutate(vertebral_height = if_else(spine_point == "c2_centroid", vertebral_height*0.5, vertebral_height))
+  
+  return_list$vertebral_heights_df <- vertebral_heights_df
+  
+  ### compute the superior endplate slope 
+  vert_angles_df <- vertebral_heights_df %>%
+    mutate(vert_angle = pmap(.l = list(..1 = lead(x),
+                                       ..2 = lead(y),
+                                       ..3 = x,
+                                       ..4 = y
+                                       ), 
+                             .f = ~ compute_perpendicular_angle(coord1_x = ..1,
+                                                                coord1_y = ..2, 
+                                                                coord2_x = ..3, 
+                                                                coord2_y = ..4))) %>%
+    unnest(vert_angle) %>%
+    filter(str_detect(spine_point, "centroid")) %>%
+    mutate(vert_angle = if_else(spine_point == "c2_centroid", lag(vert_angle), vert_angle)) %>%
+    mutate(vert_angle = vert_angle*-1)
+
+  buffer_amount <- median(vertebral_heights_df$vertebral_height, na.rm = TRUE)*0.2
+  
+  return_list$buffer_amount <- buffer_amount
+  
+### this creates the rotated square vertebrae without endplates aligned. 
+  vert_coord_for_sup_endplates_df <- vertebral_heights_df %>%
+    filter(str_detect(spine_point, "centroid")) %>%
+    mutate(vertebral_width = seq(from = s1_endplate_width, to = 0.5*s1_endplate_width, length = nrow(.))) %>%
+    mutate(vert_sf = pmap(.l = list(..1 = x, ..2 = y, ..3 = vertebral_width, ..4 = vertebral_height, ..5 = spine_facing),
+                          .f = ~ create_vertebra(centroid_x = ..1,
+                                                 centroid_y = ..2,
+                                                 width = ..3,
+                                                 height = ..4, 
+                                                 spine_orientation = ..5))) %>%
+    left_join(vert_angles_df)%>%
+    mutate(vert_sf = map(.x = vert_sf, .f = ~ st_geometry(.x))) %>%
+    mutate(vert_sf_rot = map2(.x = vert_sf, .y = vert_angle,
+                              .f = ~ rotate_polygon_around_centroid(polygon = .x, angle_degrees = .y))) %>%
+    rowwise() %>%
+    mutate(geometry = st_sfc(vert_sf_rot)) %>%
+    ungroup()
+
+
+c1_build_list <- build_c1_from_c2_geometry_function(c2_geom = (vert_coord_for_sup_endplates_df %>% filter(spine_point == "c2_centroid"))$geometry)
+  
+superior_endplate_coord_df <- tibble(spine_level = "s1_superior_endplate",
+                             sp_x = s1_posterior_superior[1],
+                             sp_y = s1_posterior_superior[2],
+                             sa_x = s1_anterior_superior[1],
+                             sa_y = s1_anterior_superior[2]) %>%
+    union_all(
+      vert_coord_for_sup_endplates_df %>%
+    mutate(spine_level = str_replace_all(spine_point, "centroid", "superior_endplate")) %>%
+    select(spine_level, geometry) %>%
+    mutate(sp_x = map(.x = geometry, 
+                      .f = ~ st_coordinates(.x)[,1:2]["sp","X"])) %>%
+    unnest(sp_x) %>%
+    mutate(sp_y = map(.x = geometry, 
+                      .f = ~ st_coordinates(.x)[,1:2]["sp","Y"])) %>%
+    unnest(sp_y) %>%
+    mutate(sa_x = map(.x = geometry, 
+                      .f = ~ st_coordinates(.x)[,1:2]["sa","X"])) %>%
+    unnest(sa_x) %>%
+    mutate(sa_y = map(.x = geometry, 
+                      .f = ~ st_coordinates(.x)[,1:2]["sa","Y"])) %>%
+    unnest(sa_y) %>%
+    select(-geometry)
+    ) %>%
+  add_row(spine_level = "c1_superior_endplate",
+          sp_x = c1_build_list$c1_coord_list$sp[1],
+          sp_y = c1_build_list$c1_coord_list$sp[2],
+          sa_x = c1_build_list$c1_coord_list$sa[1],
+          sa_y = c1_build_list$c1_coord_list$sa[2])
+
+### Align the inferior vertebral corners to the superior vertebral corners: 
+  
+  aligned_vert_geometry_df <- superior_endplate_coord_df  %>%
+    mutate(caudal_level = lag(spine_level)) %>%
+    mutate(inferior_sp_x = lag(sp_x),
+           inferior_sp_y = lag(sp_y),
+           inferior_sa_x = lag(sa_x),
+           inferior_sa_y = lag(sa_y)
+    ) %>%
+    filter(!is.na(caudal_level)) %>%
+    mutate(ia_x = pmap(.l = list(
+      ..1 = sa_x,
+      ..2 = sa_y,
+      ..3 = inferior_sa_x,
+      ..4 = inferior_sa_y
+    ), .f = ~ compute_inferior_corner(x = ..1, y = ..2, inferior_x = ..3, inferior_y = ..4, return_x_or_y = "x"))) %>%
+    unnest(ia_x) %>%
+    mutate(ia_y = pmap(.l = list(
+      ..1 = sa_x,
+      ..2 = sa_y,
+      ..3 = inferior_sa_x,
+      ..4 = inferior_sa_y
+    ), .f = ~ compute_inferior_corner(x = ..1, y = ..2, inferior_x = ..3, inferior_y = ..4, return_x_or_y = "y"))) %>%
+    unnest(ia_y)%>%
+    mutate(ip_x = pmap(.l = list(
+      ..1 = sp_x,
+      ..2 = sp_y,
+      ..3 = inferior_sp_x,
+      ..4 = inferior_sp_y
+    ), .f = ~ compute_inferior_corner(x = ..1, y = ..2, inferior_x = ..3, inferior_y = ..4, return_x_or_y = "x"))) %>%
+    unnest(ip_x) %>%
+    mutate(ip_y = pmap(.l = list(
+      ..1 = sp_x,
+      ..2 = sp_y,
+      ..3 = inferior_sp_x,
+      ..4 = inferior_sp_y
+    ), .f = ~ compute_inferior_corner(x = ..1, y = ..2, inferior_x = ..3, inferior_y = ..4, return_x_or_y = "y"))) %>%
+    unnest(ip_y) %>%
+    select(spine_level, sp_x, sp_y, sa_x, sa_y, ia_x, ia_y, ip_x, ip_y) %>%
+    pivot_longer(cols = c(sp_x, sa_x, ia_x, ip_x, sp_y, sa_y, ia_y, ip_y), names_to = "vert_point", values_to = "value") %>%
+    mutate(x_or_y = if_else(str_detect(vert_point, "_x"), "x", "y")) %>%
+    mutate(vert_point = str_remove_all(vert_point, "_x|_y")) %>%
+    pivot_wider(names_from = x_or_y, values_from = value) %>%
+    group_by(spine_level) %>%
+    nest() %>%
+    ungroup() %>%
+    mutate(vert_coord_df = map(.x = data, .f = ~ .x %>% union_all(head(.x, n = 1)))) %>%
+    select(spine_level, vert_coord_df) %>%
+    mutate(geometry = map(.x = vert_coord_df, .f = ~ st_polygon(list(as.matrix(.x %>% select(x, y)))))) %>%
+    rowwise() %>%
+    mutate(geometry = st_sfc(geometry)) %>%
+    ungroup()%>%
+    mutate(spine_level = str_remove_all(spine_level, "_superior_endplate")) %>%
+  filter(spine_level != "c1") %>%
+    add_row(spine_level = "c1", vert_coord_df = list(c1_build_list$vert_coord_df), geometry = st_sfc(c1_build_list$c1_geom))
+  
+
+# aligned_vert_geometry_df
+
+return_list$aligned_vert_geometry_df <- aligned_vert_geometry_df
+  
+  ### we now have the aligned vertebral bodies. 
+  
+  vert_geoms_square_list <- aligned_vert_geometry_df$geometry
+  
+  names(vert_geoms_square_list) <- aligned_vert_geometry_df$spine_level
+  
+  vert_coord_list <- map(.x = aligned_vert_geometry_df$vert_coord_df, .f = ~ .x %>% distinct())
+
+  names(vert_coord_list) <- aligned_vert_geometry_df$spine_level
+
+  vert_coord_list <- map(.x = vert_coord_list, .f = ~ reformat_vert_tibble(.x))
+  
+
+  return_list$vert_geoms_square_list <- vert_geoms_square_list
+  return_list$vert_coord_list <- vert_coord_list
+  
+
+
+  
+  #### NOW COMPUTE THE SEGMENT ANGLES FROM EACH SUPERIOR ENDPLATE TO SUPERIOR ENDPLATE
+    ### compute segment angles
+  # segment_angles_for_planning_df <- 
+  segment_angles_df <- superior_endplate_coord_df %>%
+    mutate(distal_sp_x = lag(sp_x),
+           distal_sp_y = lag(sp_y),
+           distal_sa_x = lag(sa_x),
+           distal_sa_y = lag(sa_y)
+    ) %>%
+    filter(spine_level != "s1_superior_endplate") %>%
+    mutate(segment_angle = pmap(.l = list(..1 = sp_x, 
+                                          ..2 = sp_y,
+                                          ..3 = sa_x, 
+                                          ..4 = sa_y,
+                                          ..5 = distal_sp_x, 
+                                          ..6 = distal_sp_y,
+                                          ..7 = distal_sa_x, 
+                                          ..8 = distal_sa_y
+    ),
+    .f =~ calculate_segment_angle_between_vertebrae_from_coordinates_function(sp_upper = c(..1, ..2),
+                                                                              sa_upper = c(..3, ..4),
+                                                                              sp_lower = c(..5, ..6),
+                                                                              sa_lower = c(..7, ..8)))) %>%
+    unnest(segment_angle) %>%
+    mutate(segment_angle = round(segment_angle, 4)) %>%
+    mutate(spine_level = str_replace_all(spine_level, "_superior_endplate", "_segment_angle")) %>%
+    select(spine_level, segment_angle) %>%
+    filter(spine_level != "c1_segment_angle") %>%
+    add_row(spine_level = "c1_segment_angle", 
+                   segment_angle = 0)
+  
+  segment_angles_list <- as.list(segment_angles_df$segment_angle)
+  names(segment_angles_list) <- segment_angles_df$spine_level
+
+return_list$segment_angles_list <- segment_angles_list
+
+############## now fix C2 ###############
+
+dens_sa <- jh_get_point_along_line_function(coord_a = return_list$vert_coord_list$c2$ia, coord_b = return_list$vert_coord_list$c2$sa, percent_a_to_b = 1.6)
+dens_ia <- return_list$vert_coord_list$c2$ia
+dens_ip <- jh_get_point_along_line_function(coord_a = return_list$vert_coord_list$c2$ia, coord_b = return_list$vert_coord_list$c2$ip, percent_a_to_b = 0.3)
+c2_dens_post <- jh_get_point_along_line_function(coord_a = return_list$vert_coord_list$c2$sa, coord_b = return_list$vert_coord_list$c2$sp, percent_a_to_b = 0.3)
+dens_sp <- jh_get_point_along_line_function(coord_a = dens_ip, coord_b = c2_dens_post, percent_a_to_b = 1.6)
+  
+dens <- st_polygon(list(rbind(dens_sp, dens_sa, dens_ia, dens_ip, dens_sp)))
+
+c2_with_odontoid_sf <- st_union(dens, return_list$vert_geoms_square_list$c2)
+
+return_list$vert_geoms_square_list$c2 <- c2_with_odontoid_sf
+
+
+    ### create femoral heads and Sacrum #######
+  return_list$fem_head_sf <- st_buffer(x = st_point(femoral_head_center),
+                           dist = buffer_amount * 4,
+                           endCapStyle = "ROUND")
+  
+  
+  s1_mid <- c((centroid_df %>% filter(spine_point == "s1_center"))$x, (centroid_df %>% filter(spine_point == "s1_center"))$y)
+  
+  sac_inf_1 <- find_sacrum_inf_point_function(s1_posterior_sup = s1_posterior_superior, 
+                                              s1_midpoint = s1_mid, 
+                                              femoral_heads_center = femoral_head_center, 
+                                              spine_facing = spine_facing)
+  
+  sacrum_sf <- st_polygon(list(rbind(s1_anterior_superior, 
+                                     sac_inf_1,
+                                     s1_posterior_superior, 
+                                     s1_anterior_superior)))
+  
+  return_list$sacrum_sf <-  st_buffer(x = st_buffer(x = sacrum_sf, dist = -buffer_amount, endCapStyle = "ROUND"), dist = buffer_amount, endCapStyle = "ROUND")
+  
+  return_list$vert_list <- map(.x = return_list$vert_geoms_square_list, 
+                               .f = ~ st_buffer(x = st_buffer(x = .x, dist = -buffer_amount, endCapStyle = "ROUND"),
+                                                                            dist = buffer_amount, endCapStyle = "ROUND"))
+  
+  # buffer_amount
+  ########### lines ################
+  
+  l1_to_fem_head_length <- jh_calculate_distance_between_2_points_function(st_coordinates(st_centroid(return_list$vert_geoms_square_list$l1)),
+                                                fem_head_center)
+
+lines_list <- list()
+  l1pa_line <- st_linestring(rbind(st_centroid(return_list$vert_geoms_square_list$l1),
+                                   femoral_head_center,
+                                   s1_mid))
+  
+  lines_list$l1pa <-   jh_plot_angle_curve_function(vertex_vector = femoral_head_center,
+                                                    line_st_geometry = l1pa_line,
+                                                    distance_of_curve = l1_to_fem_head_length/3)
+  
+  t9pa_line <- st_linestring(rbind(st_centroid(return_list$vert_geoms_square_list$t9),
+                                   femoral_head_center,
+                                   s1_mid))
+  
+  lines_list$t9pa <-   jh_plot_angle_curve_function(vertex_vector = femoral_head_center,
+                                                    line_st_geometry = t9pa_line,
+                                                    distance_of_curve = l1_to_fem_head_length/2.75)
+  
+  
+  t4pa_line <- st_linestring(rbind(st_centroid(return_list$vert_geoms_square_list$t4),
+                                   femoral_head_center,
+                                   s1_mid))
+  
+  lines_list$t4pa <-   jh_plot_angle_curve_function(vertex_vector = femoral_head_center,
+                                                    line_st_geometry = t4pa_line,
+                                                    distance_of_curve = l1_to_fem_head_length/2.5)
+  
+  
+  c2pa_line <- st_linestring(rbind(st_centroid(dens),
+                                   femoral_head_center,
+                                   s1_mid))
+  
+  lines_list$c2pa <-   jh_plot_angle_curve_function(vertex_vector = femoral_head_center,
+                                                    line_st_geometry = c2pa_line,
+                                                    distance_of_curve = l1_to_fem_head_length/2)
+  
+  
+  return_list$lines_list <- lines_list
+  
+  
+#   spine_geom_list_for_lines <- vertebral_coord_dim_sf_df$geometry
+#   
+#   names(spine_geom_list_for_lines) <- str_replace_all(vertebral_coord_dim_sf_df$spine_point, "centroid", "geom")
+#   
+#   return_list$vert_geoms_square_list$l1
+# 
+# st_length(st_linestring(rbind(st_centroid(return_list$vert_geoms_square_list$l1),
+#                                                                                                       fem_head_center)))
+# 
+# jh_calculate_distance_between_2_points_function(st_coordinates(st_centroid(return_list$vert_geoms_square_list$l1)),
+#                                                 fem_head_center)
+# 
+# st_centroid(return_list$vert_geoms_square_list$l1)
+```
+
+
+```{r}
+l1_to_fem_head_length <- jh_calculate_distance_between_2_points_function(st_coordinates(st_centroid(return_list$vert_geoms_square_list$l1)),
+                                                fem_head_center)
+
+lines_list <- list()
+  l1pa_line <- st_linestring(rbind(st_centroid(return_list$vert_geoms_square_list$l1),
+                                   femoral_head_center,
+                                   s1_mid))
+  
+  lines_list$l1pa <-   jh_plot_angle_curve_function(vertex_vector = femoral_head_center,
+                                                    line_st_geometry = l1pa_line,
+                                                    distance_of_curve = l1_to_fem_head_length/3)
+  
+  t9pa_line <- st_linestring(rbind(st_centroid(return_list$vert_geoms_square_list$t9),
+                                   femoral_head_center,
+                                   s1_mid))
+  
+  lines_list$t9pa <-   jh_plot_angle_curve_function(vertex_vector = femoral_head_center,
+                                                    line_st_geometry = t9pa_line,
+                                                    distance_of_curve = l1_to_fem_head_length/2.75)
+  
+  
+  t4pa_line <- st_linestring(rbind(st_centroid(return_list$vert_geoms_square_list$t4),
+                                   femoral_head_center,
+                                   s1_mid))
+  
+  lines_list$t4pa <-   jh_plot_angle_curve_function(vertex_vector = femoral_head_center,
+                                                    line_st_geometry = t4pa_line,
+                                                    distance_of_curve = l1_to_fem_head_length/2.5)
+  
+  
+  c2pa_line <- st_linestring(rbind(st_centroid(dens),
+                                   femoral_head_center,
+                                   s1_mid))
+  
+  lines_list$c2pa <-   jh_plot_angle_curve_function(vertex_vector = femoral_head_center,
+                                                    line_st_geometry = c2pa_line,
+                                                    distance_of_curve = l1_to_fem_head_length/2)
+  
+  
+  return_list$lines_list <- lines_list
+  
+```
+
+
+```{r}
+ggplot() + 
+  geom_sf(data = return_list$vert_geoms_square_list[20:length(return_list$vert_geoms_square_list)])+
+  geom_sf(data = dens, fill= "blue", alpha = 0.2)
+
+
+ggplot() + 
+  geom_sf(data = return_list$vert_geoms_square_list[20:length(return_list$vert_geoms_square_list)]) +
+  geom_sf(data = c2_with_odontoid_sf, fill= "blue", alpha = 0.2) +
+  geom_sf(data = st_point(return_list$vert_coord_list$c1$sp), color = "red", size = 5) + 
+  geom_sf(data = st_point(return_list$vert_coord_list$c1$ip), color = "orange", size = 5)+
+  geom_sf(data = st_point(return_list$vert_coord_list$c2$ia), color = "green", size = 3)+
+  geom_sf(data = st_point(dens_ia), color = "purple", size = 5)+
+  geom_sf(data = st_point(dens_ip), color = "magenta", size = 5) +
+  geom_sf(data = vert_geoms_square_list$c1, fill = "black")
+
+return_list$vert_coord_list$c1
+```
+
+
+```{r}
+########################## now start assembling the other geoms and lines ##################
+
+    ### create femoral heads and Sacrum #######
+  fem_head_sf <- st_buffer(x = st_point(femoral_head_center),
+                           dist = buffer_amount * 4,
+                           endCapStyle = "ROUND")
+  
+  
+  s1_mid <- c((centroid_df %>% filter(spine_point == "s1_center"))$x, (centroid_df %>% filter(spine_point == "s1_center"))$y)
+  
+  sac_inf_1 <- find_sacrum_inf_point_function(s1_posterior_sup = s1_posterior_superior, 
+                                              s1_midpoint = s1_mid, 
+                                              femoral_heads_center = femoral_head_center, 
+                                              spine_facing = spine_facing)
+  
+  sacrum_sf <- st_polygon(list(rbind(s1_anterior_superior, 
+                                     sac_inf_1,
+                                     s1_posterior_superior, 
+                                     s1_anterior_superior)))
+  
+  sacrum_sf <-  st_buffer(x = st_buffer(x = sacrum_sf, dist = -buffer_amount, endCapStyle = "ROUND"), dist = buffer_amount, endCapStyle = "ROUND")
+
+```
+
+
+```{r}
+
+
+
+```
+
+```{r}
+
+c1_build_list$vert_coord_df
+
+
+```
+
+
+```{r}
+
+  
+# segment_angles_list
+
+ superior_endplate_coord_df
+  
+  ggplot() + 
+    geom_sf(data = aligned_vert_geometry_df$geometry[1:3], fill = "blue") +
+    geom_sf(data = vert_coord_for_sup_endplates_df$geometry[1:3], fill = "red", alpha = 0.5) +
+    geom_sf(data = st_point(s1_anterior_superior), fill = "green", size = 3)+
+    geom_sf(data = st_point(s1_posterior_superior), fill = "green", size = 3)
+  
+  
+```
+
+
+```{r}
+sup_endplates_df
+  
+```
+
+
+```{r}
+
+  
+
+  ## sup endplates ##
+  
+  
+  spine_geom_list_endplates <- vert_coord_for_sup_endplates_df$geometry
+  
+  names(spine_geom_list_endplates) <- str_replace_all(vert_coord_for_sup_endplates_df$spine_point, "centroid", "geom")
+  
+  sup_endplates_list_df <- map(.x = spine_geom_list_endplates, .f = ~ clean_names(as_tibble(st_coordinates(.x)[1:2,1:2])) %>% mutate(endplate_points = rownames(st_coordinates(.x)[1:2,1:2])))
+  
+  sup_endplates_list_df
+
+  names(sup_endplates_list_df) <- str_replace_all(names(spine_geom_list_endplates), pattern = "geom", "superior_endplate")
+
+  sup_endplates_list_df <- map2(.x = sup_endplates_list_df, .y = names(sup_endplates_list_df), .f = ~ .x %>% mutate(spine_level = .y))
+
+  sup_endplates_df <- tibble(spine_level = "s1_superior_endplate",
+                             sp_x = s1_posterior_superior[1],
+                             sp_y = s1_posterior_superior[2],
+                             sa_x = s1_anterior_superior[1],
+                             sa_y = s1_anterior_superior[2]) %>%
+    union_all(bind_rows(sup_endplates_list_df) %>%
+                select(spine_level, endplate_points, x, y) %>%
+                filter(endplate_points == "sp") %>%
+                select(spine_level, sp_x = x, sp_y = y) %>%
+                left_join(bind_rows(sup_endplates_list_df) %>%
+                            select(spine_level, endplate_points, x, y) %>%
+                            filter(endplate_points == "sa") %>%
+                            select(spine_level, sa_x = x, sa_y = y))
+  )
+  
+  ### Align the inferior vertebral corners to the superior vertebral corners: 
+  
+  revised_corners_df <- sup_endplates_df  %>%
+    mutate(caudal_level = lag(spine_level)) %>%
+    mutate(inferior_sp_x = lag(sp_x),
+           inferior_sp_y = lag(sp_y),
+           inferior_sa_x = lag(sa_x),
+           inferior_sa_y = lag(sa_y)
+    ) %>%
+    filter(!is.na(caudal_level)) %>%
+    mutate(ia_x = pmap(.l = list(
+      ..1 = sa_x,
+      ..2 = sa_y,
+      ..3 = inferior_sa_x,
+      ..4 = inferior_sa_y
+    ), .f = ~ compute_inferior_corner(x = ..1, y = ..2, inferior_x = ..3, inferior_y = ..4, return_x_or_y = "x"))) %>%
+    unnest(ia_x) %>%
+    mutate(ia_y = pmap(.l = list(
+      ..1 = sa_x,
+      ..2 = sa_y,
+      ..3 = inferior_sa_x,
+      ..4 = inferior_sa_y
+    ), .f = ~ compute_inferior_corner(x = ..1, y = ..2, inferior_x = ..3, inferior_y = ..4, return_x_or_y = "y"))) %>%
+    unnest(ia_y)%>%
+    mutate(ip_x = pmap(.l = list(
+      ..1 = sp_x,
+      ..2 = sp_y,
+      ..3 = inferior_sp_x,
+      ..4 = inferior_sp_y
+    ), .f = ~ compute_inferior_corner(x = ..1, y = ..2, inferior_x = ..3, inferior_y = ..4, return_x_or_y = "x"))) %>%
+    unnest(ip_x) %>%
+    mutate(ip_y = pmap(.l = list(
+      ..1 = sp_x,
+      ..2 = sp_y,
+      ..3 = inferior_sp_x,
+      ..4 = inferior_sp_y
+    ), .f = ~ compute_inferior_corner(x = ..1, y = ..2, inferior_x = ..3, inferior_y = ..4, return_x_or_y = "y"))) %>%
+    unnest(ip_y)
+  
+  aligned_squared_vert_df <- revised_corners_df %>%
+    select(spine_level, sp_x, sp_y, sa_x, sa_y, ia_x, ia_y, ip_x, ip_y) %>%
+    pivot_longer(cols = c(sp_x, sa_x, ia_x, ip_x, sp_y, sa_y, ia_y, ip_y), names_to = "vert_point", values_to = "value") %>%
+    mutate(x_or_y = if_else(str_detect(vert_point, "_x"), "x", "y")) %>%
+    mutate(vert_point = str_remove_all(vert_point, "_x|_y")) %>%
+    pivot_wider(names_from = x_or_y, values_from = value) %>%
+    group_by(spine_level) %>%
+    nest() %>%
+    ungroup() %>%
+    mutate(vert_coord_df = map(.x = data, .f = ~ .x %>% union_all(head(.x, n = 1)))) %>%
+    select(spine_level, vert_coord_df) %>%
+    mutate(geometry = map(.x = vert_coord_df, .f = ~ st_polygon(list(as.matrix(.x %>% select(x, y))))))
+  
+  
+  
+  
+  #### should probably stop and compute C1 and c2 here... or at least C1. Then create the square vert list, then the buffered vert list.  
+ 
+  square_vert_df <- aligned_squared_vert_df %>%
+    rowwise() %>%
+    mutate(geometry = st_sfc(geometry)) %>%
+    ungroup()%>%
+    mutate(spine_level = str_remove_all(spine_level, "_superior_endplate"))
+    
+  ### compute segment angles
+  segment_angles_for_planning_df <- sup_endplates_df %>%
+    mutate(distal_sp_x = lag(sp_x),
+           distal_sp_y = lag(sp_y),
+           distal_sa_x = lag(sa_x),
+           distal_sa_y = lag(sa_y)
+    ) %>%
+    filter(spine_level != "s1_superior_endplate") %>%
+    mutate(segment_angle = pmap(.l = list(..1 = sp_x, 
+                                          ..2 = sp_y,
+                                          ..3 = sa_x, 
+                                          ..4 = sa_y,
+                                          ..5 = distal_sp_x, 
+                                          ..6 = distal_sp_y,
+                                          ..7 = distal_sa_x, 
+                                          ..8 = distal_sa_y
+    ),
+    .f =~ calculate_segment_angle_between_vertebrae_from_coordinates_function(sp_upper = c(..1, ..2),
+                                                                              sa_upper = c(..3, ..4),
+                                                                              sp_lower = c(..5, ..6),
+                                                                              sa_lower = c(..7, ..8)))) %>%
+    unnest(segment_angle) %>%
+    mutate(segment_angle = round(segment_angle, 4)) %>%
+    mutate(spine_level = str_replace_all(spine_level, "_superior_endplate", "_segment_angle")) %>%
+    select(spine_level, segment_angle)
+  
+  segment_angles_list_for_planning <- as.list(segment_angles_for_planning_df$segment_angle)
+  names(segment_angles_list_for_planning) <- segment_angles_for_planning_df$spine_level
+  segment_angles_list_for_planning$c1_segment_angle <- 0
+  
+  ## generate squared vertebra coord list
+  
+  squared_vert_df <- aligned_squared_vert_df %>%
+    rowwise() %>%
+    mutate(geometry = st_sfc(geometry)) %>%
+    ungroup()%>%
+    mutate(spine_level = str_remove_all(spine_level, "_superior_endplate"))
+  
+  squared_vert_list <- squared_vert_df$geometry
+  
+  names(squared_vert_list) <- squared_vert_df$spine_level
+  
+  vert_coord_list <- map(.x = square_vert_df$vert_coord_df, .f = ~ .x %>% distinct())
+
+  names(vert_coord_list) <- square_vert_df$spine_level
+
+  vert_coord_list <- map(.x = vert_coord_list, .f = ~ reformat_vert_tibble(.x))
+  
+  
+  
+    ### create femoral heads and Sacrum #######
+  fem_head_sf <- st_buffer(x = st_point(femoral_head_center),
+                           dist = buffer_amount * 4,
+                           endCapStyle = "ROUND")
+  
+  
+  s1_mid <- c((centroid_df %>% filter(spine_point == "s1_center"))$x, (centroid_df %>% filter(spine_point == "s1_center"))$y)
+  
+  sac_inf_1 <- find_sacrum_inf_point_function(s1_posterior_sup = s1_posterior_superior, 
+                                              s1_midpoint = s1_mid, 
+                                              femoral_heads_center = femoral_head_center, 
+                                              spine_facing = spine_facing)
+  
+  sacrum_sf <- st_polygon(list(rbind(s1_anterior_superior, 
+                                     sac_inf_1,
+                                     s1_posterior_superior, 
+                                     s1_anterior_superior)))
+  
+  sacrum_sf <-  st_buffer(x = st_buffer(x = sacrum_sf, dist = -buffer_amount, endCapStyle = "ROUND"), dist = buffer_amount, endCapStyle = "ROUND")
+  
+```
+
