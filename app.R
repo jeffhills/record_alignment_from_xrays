@@ -258,6 +258,7 @@ ui <- dashboardPage(
       )
     ),
     tableOutput(outputId = "redcap_measures_table"),
+    textOutput(outputId = "redcap_measures_pelvic_thickness_for_qc_check_table"),
     # fluidRow(
     #   box(title = "Recording Alignment:",width = 12,
     #       div(
@@ -360,7 +361,7 @@ ui <- dashboardPage(
         "input.all_points_recorded == true",
         actionBttn(inputId = "upload_to_redcap", label = "Upload Coordinates to Redcap", icon = icon("upload"), style = "jelly", color = "primary", size = "md")
       ),
-      box(width = 3,
+      box(width = 5,
           conditionalPanel(
             condition = "input.xray_file_uploaded == true",
             fluidRow(
@@ -767,17 +768,17 @@ ui <- dashboardPage(
         # )
         )
       ),
-      box(width = 3, 
-          tableOutput(outputId = "spine_click_parameters")
+      box(width = 2, 
+          # tableOutput(outputId = "spine_click_parameters")
+          tableOutput("alignment_parameters_df")
           ),
-      column(width = 2, 
+      column(width = 3, 
              conditionalPanel(
         condition = "input.all_points_recorded == true",
         box(title = "Preop Alignment:", 
             width = 12,
             plotOutput(outputId = "preop_spine_simulation_plot",
-                       height = "750px"),
-            tableOutput("alignment_parameters_df")
+                       height = "750px")
         ), 
         box(title = "Alignment Planning:",
               collapsible = TRUE, collapsed = TRUE,
@@ -792,34 +793,34 @@ ui <- dashboardPage(
             textOutput("xray_centroid_tibble_text")
             )
       )
-      ),
-      conditionalPanel(
-        condition = "input.all_points_recorded == true",
-      box(width = 4,
-        # title = "Plans",
-        actionBttn(
-          inputId = "compute_plan_xray",
-          label = "Compute Plan",
-          style = "unite", 
-          color = "danger"
-        ),
-        hr(),
-        fluidRow(
-          tabBox(width = 12,
-            title = div(style = "float: right;", "Alignment Plans"),  # Moves title to the right
-            id = "alignment_plans", 
-            tabPanel("Lower T UIV", 
-                     # plotOutput(outputId = "spine_plan_lower_t_xray", height = 650), 
-                     uiOutput(outputId = "spine_plan_lower_t_ui")
-            ),
-            tabPanel("Upper T UIV", 
-                     # plotOutput(outputId = "spine_plan_upper_t_xray", height = 650),
-                     uiOutput(outputId = "spine_plan_upper_t_ui")
-            )
-          )
-        )
       )
-      )
+      # conditionalPanel(
+      #   condition = "input.all_points_recorded == true",
+      # box(width = 4,
+      #   # title = "Plans",
+      #   actionBttn(
+      #     inputId = "compute_plan_xray",
+      #     label = "Compute Plan",
+      #     style = "unite", 
+      #     color = "danger"
+      #   ),
+      #   hr(),
+      #   fluidRow(
+      #     tabBox(width = 12,
+      #       title = div(style = "float: right;", "Alignment Plans"),  # Moves title to the right
+      #       id = "alignment_plans", 
+      #       tabPanel("Lower T UIV", 
+      #                # plotOutput(outputId = "spine_plan_lower_t_xray", height = 650), 
+      #                uiOutput(outputId = "spine_plan_lower_t_ui")
+      #       ),
+      #       tabPanel("Upper T UIV", 
+      #                # plotOutput(outputId = "spine_plan_upper_t_xray", height = 650),
+      #                uiOutput(outputId = "spine_plan_upper_t_ui")
+      #       )
+      #     )
+      #   )
+      # )
+      # )
     )
   )
 )
@@ -1442,6 +1443,7 @@ server <- function(input, output, session) {
   observe({
     if(nrow(actively_computing_parameters_reactive_list$alignment_df)>0){
       
+      
       if(nrow(imported_redcap_data$cleaned_df)>0 & any(names(imported_redcap_data$cleaned_df) == "value")){
         
         data_unformatted <- actively_computing_parameters_reactive_list$alignment_df %>%
@@ -1476,7 +1478,7 @@ server <- function(input, output, session) {
   })
   
   observeEvent(input$c2_centroid_s1_center_length, ignoreInit = TRUE, {
-    if(imported_redcap_data$pelvic_thickness_value_for_qc_check != 0 & as.double(input$c2_centroid_s1_center_length) > 250 & input$all_points_recorded){
+    # if(imported_redcap_data$pelvic_thickness_value_for_qc_check != 0 & as.double(input$c2_centroid_s1_center_length) > 250 & input$all_points_recorded){
 
       c2_sacrum_xy_pixel_dist <- xray_centroid_coordinates_reactive_df() %>%
         filter(spine_point %in% c("s1_center", "c2_centroid")) %>%
@@ -1499,9 +1501,9 @@ server <- function(input, output, session) {
 
       measurement_error_reactivevalues$pelvic_thickness_error_value <- round(pelvic_thickness_scaled_computed - imported_redcap_data$pelvic_thickness_value_for_qc_check, 1)
 
-    }else{
-      measurement_error_reactivevalues$pelvic_thickness_error_value <- 99
-    }
+    # }else{
+    #   measurement_error_reactivevalues$pelvic_thickness_error_value <- 99
+    # }
 
   })
   
@@ -1706,11 +1708,11 @@ server <- function(input, output, session) {
       )
     }
     
-      if(input$record_calibration_measure){
+      # if(input$record_calibration_measure){
         showModal(
           c2_centroid_s1_center_length_modal_function(c2_centroid_s1_center_length = input$c2_centroid_s1_center_length)
         ) 
-      }
+      # }
   })
 
   spine_build_list_reactivevalues <- reactiveValues(spine_build_list = list())
@@ -2502,7 +2504,15 @@ observeEvent(input$upload_to_redcap, ignoreInit = TRUE, {
   })
   
   observeEvent(input$upload_to_redcap, {
-    print(measurement_error_reactivevalues$error_over_2)
+    # print(measurement_error_reactivevalues$error_over_2)
+    
+    print(paste("measurement_error_reactivevalues$error_over_2 class is:", class(measurement_error_reactivevalues$error_over_2)))
+    print(paste("measurement_error_reactivevalues$pelvic_thickness_error_value class is:", class(measurement_error_reactivevalues$pelvic_thickness_error_value)))
+    
+    print(paste("measurement_error_reactivevalues$error_over_2 is:", measurement_error_reactivevalues$error_over_2))
+    print(paste("measurement_error_reactivevalues$pelvic_thickness_error_value is:", measurement_error_reactivevalues$pelvic_thickness_error_value))
+    
+    
     if(measurement_error_reactivevalues$error_over_2){
       showModal(
         modalDialog(footer = "Redcap Upload", easyClose = TRUE,  size = "l",  
@@ -2641,6 +2651,7 @@ observeEvent(input$upload_to_redcap, ignoreInit = TRUE, {
   })
   
   imported_redcap_data <- reactiveValues(imported_data = tibble(), 
+                                         cleaned_df = tibble(),
                                          pelvic_thickness_value_for_qc_check = 0)
   
   
@@ -2677,6 +2688,7 @@ observeEvent(input$upload_to_redcap, ignoreInit = TRUE, {
         select(id = record_id, measure, value)
       
       imported_redcap_data$pelvic_thickness_value_for_qc_check <- record_redcap_export_df %>%
+        filter(!is.na(pelvic_thickness)) %>%
         pull(pelvic_thickness) %>%
         as.double()
 
@@ -2694,6 +2706,10 @@ observeEvent(input$upload_to_redcap, ignoreInit = TRUE, {
       
       imported_redcap_data$cleaned_df
     }
+  })
+  
+  output$redcap_measures_pelvic_thickness_for_qc_check_table <- renderText({
+    print(imported_redcap_data$pelvic_thickness_value_for_qc_check)
   })
   
   

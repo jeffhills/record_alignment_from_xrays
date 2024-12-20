@@ -325,6 +325,7 @@ jh_find_fem_head_center_given_pi_and_thickness_function <- function(inf_sacrum, 
   # return(angle_fem*180/pi)
 }
 
+
 jh_get_point_along_line_function <- function(coord_a, coord_b, percent_a_to_b = 0.5){
   
   if(percent_a_to_b == 0.5){
